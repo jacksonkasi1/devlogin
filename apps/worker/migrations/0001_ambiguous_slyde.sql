@@ -1,0 +1,1 @@
+ALTER TABLE `accounts` ADD `environment` text DEFAULT '' NOT NULL;

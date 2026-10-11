@@ -1,0 +1,15 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "devlogin",
+  "account_id": "86145dad61413f9a7800ad8c5d481b81",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-11",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "routes": [{ "pattern": "devlogin.peacockindia.in", "custom_domain": true, "zone_name": "peacockindia.in" }],
+  "preview_urls": false,
+  "observability": { "enabled": true },
+  "assets": { "directory": "../web/dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*"] },
+  "d1_databases": [{ "binding": "DB", "database_name": "devlogin", "database_id": "ebecaf42-9ad3-47e4-b4bf-da3a6082c454", "migrations_dir": "migrations" }],
+  "vars": { "APP_ORIGIN": "https://devlogin.peacockindia.in", "EXTENSION_IDS": "dlhhhalmplphflkcolobockpofadfeaa" }
+}

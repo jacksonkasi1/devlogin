@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1791731780814,
+      "tag": "0000_lumpy_gabe_jones",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1791736130112,
+      "tag": "0001_ambiguous_slyde",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791744240614,
+      "tag": "0002_perfect_blindfold",
+      "breakpoints": true
+    }
+  ]
+}
