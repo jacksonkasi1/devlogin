@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   ApiError,
   apiRequest,
   type User,
   type Sync,
   type Project,
+  type Account,
 } from "@workspace/shared"
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -69,6 +70,8 @@ export function App() {
   const [tab, setTab] = useState("projects")
   const [search, setSearch] = useState("")
   const [accountId, setAccountId] = useState<string | null>(null)
+  const [moving, setMoving] = useState(false)
+  const moveInFlight = useRef(false)
   const [mobilePanel, setMobilePanel] = useState<
     "projects" | "accounts" | "details"
   >("projects")
@@ -144,6 +147,34 @@ export function App() {
       toast.error(
         failure instanceof Error ? failure.message : "Sign out failed"
       )
+    }
+  }
+  async function moveLogin(account: Account, project: Project) {
+    if (
+      !user?.is_admin ||
+      moveInFlight.current ||
+      account.project_id === project.id
+    )
+      return
+    moveInFlight.current = true
+    setMoving(true)
+    try {
+      await api<Account>(`/api/accounts/${account.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ ...account, project_id: project.id }),
+      })
+      await refresh()
+      setSelected(project)
+      setAccountId(account.id)
+      setSearch("")
+      toast.success(`Moved to ${project.name}`)
+    } catch (failure) {
+      toast.error(
+        failure instanceof Error ? failure.message : "Could not move login"
+      )
+    } finally {
+      moveInFlight.current = false
+      setMoving(false)
     }
   }
   async function signIn() {
@@ -383,6 +414,8 @@ export function App() {
               loading={loading}
               mobilePanel={mobilePanel}
               setMobilePanel={setMobilePanel}
+              moving={moving}
+              onMove={(account, project) => void moveLogin(account, project)}
             />
           </TabsContent>
           {user.is_admin && (

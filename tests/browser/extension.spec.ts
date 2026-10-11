@@ -225,6 +225,14 @@ test("popup can add, edit, and delete shared projects and accounts", async () =>
   const ui = await popup()
   await ui.getByRole("button", { name: "Projects", exact: true }).click()
   await ui.getByRole("button", { name: "Add", exact: true }).click()
+  await ui.getByRole("button", { name: "Change icon preview" }).click()
+  await ui.getByRole("button", { name: "More emojis", exact: true }).click()
+  await ui
+    .getByRole("textbox", { name: "Search emojis or paste one" })
+    .fill("dragon")
+  await ui
+    .getByRole("button", { name: "Use dragon emoji", exact: true })
+    .click()
   await ui
     .getByLabel("Project name", { exact: true })
     .fill("Browser-created project")

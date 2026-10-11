@@ -266,6 +266,8 @@ export function ProjectsView({
   loading,
   mobilePanel,
   setMobilePanel,
+  moving,
+  onMove,
 }: {
   data: Sync | null
   selected: Project | null
@@ -278,8 +280,15 @@ export function ProjectsView({
   loading: boolean
   mobilePanel: "projects" | "accounts" | "details"
   setMobilePanel: (panel: "projects" | "accounts" | "details") => void
+  moving: boolean
+  onMove: (account: Account, project: Project) => void
 }) {
+  const [draggedId, setDraggedId] = useState<string | null>(null)
+  const [dropId, setDropId] = useState<string | null>(null)
   const projects = data?.projects ?? []
+  const dragged = data?.accounts.find((a) => a.id === draggedId)
+  const canDrop = (p: Project) =>
+    admin && !loading && !moving && !!dragged && dragged.project_id !== p.id
   const query = search.trim().toLowerCase()
   const accounts = (data?.accounts ?? []).filter(
     (a) =>
@@ -338,9 +347,36 @@ export function ProjectsView({
               : projects.map((p) => (
                   <button
                     key={p.id}
-                    className={`${row} ${selected?.id === p.id ? "bg-accent font-medium" : ""}`}
+                    className={`${row} ${selected?.id === p.id ? "bg-accent font-medium" : ""} ${dropId === p.id ? "bg-accent ring-2 ring-primary ring-inset" : ""}`}
                     aria-current={selected?.id === p.id ? "true" : undefined}
                     onClick={() => chooseProject(p)}
+                    onDragOver={(event) => {
+                      if (!canDrop(p)) return
+                      event.preventDefault()
+                      event.dataTransfer.dropEffect = "move"
+                      setDropId(p.id)
+                    }}
+                    onDragLeave={(event) => {
+                      if (
+                        !event.currentTarget.contains(
+                          event.relatedTarget as Node | null
+                        )
+                      )
+                        setDropId(null)
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault()
+                      if (
+                        canDrop(p) &&
+                        dragged &&
+                        event.dataTransfer.getData(
+                          "application/x-devlogin-account"
+                        ) === dragged.id
+                      )
+                        onMove(dragged, p)
+                      setDraggedId(null)
+                      setDropId(null)
+                    }}
                   >
                     <ItemIcon icon={p.icon} folder />
                     <span className="min-w-0 flex-1 truncate">{p.name}</span>
@@ -435,8 +471,26 @@ export function ProjectsView({
                   return (
                     <button
                       key={a.id}
+                      draggable={admin && !loading && !moving}
+                      title={
+                        admin
+                          ? "Drag onto a project to move this login"
+                          : undefined
+                      }
+                      onDragStart={(event) => {
+                        event.dataTransfer.setData(
+                          "application/x-devlogin-account",
+                          a.id
+                        )
+                        event.dataTransfer.effectAllowed = "move"
+                        setDraggedId(a.id)
+                      }}
+                      onDragEnd={() => {
+                        setDraggedId(null)
+                        setDropId(null)
+                      }}
                       aria-pressed={account?.id === a.id}
-                      className={`${row} py-3 ${account?.id === a.id ? "bg-accent ring-1 ring-border ring-inset" : ""}`}
+                      className={`${row} py-3 ${account?.id === a.id ? "bg-accent ring-1 ring-border ring-inset" : ""} ${draggedId === a.id ? "opacity-50" : ""} ${admin && !moving ? "cursor-grab active:cursor-grabbing" : ""}`}
                       onClick={() => {
                         setAccountId(a.id)
                         setMobilePanel("details")

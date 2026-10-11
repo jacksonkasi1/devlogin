@@ -244,6 +244,9 @@ test("members retain read access; pending users cannot view credentials", async 
   ).toHaveCount(0)
   await page.getByRole("button", { name: /Fixture account/ }).click()
   await expect(
+    page.getByRole("button", { name: /Fixture account/ })
+  ).toHaveAttribute("draggable", "false")
+  await expect(
     page.getByRole("button", { name: "Copy password", exact: true })
   ).toBeVisible()
   await expect(
@@ -258,6 +261,157 @@ test("members retain read access; pending users cannot view credentials", async 
     page.getByRole("region", { name: "Accounts", exact: true })
   ).toHaveCount(0)
 })
+
+test("dragging a login to a project preserves credentials and handles rejected moves", async ({
+  page,
+  request,
+}) => {
+  const { token } = await (await request.get(`${backend}/fixture/token`)).json()
+  const headers = { Authorization: `Bearer ${token}` }
+  const target = await (
+    await request.post(`${backend}/api/projects`, {
+      headers,
+      data: { name: "Drop target" },
+    })
+  ).json()
+  const original = (
+    await (await request.get(`${backend}/api/accounts`, { headers })).json()
+  )[0]
+  const metadata = {
+    ...original,
+    icon: "🚀",
+    notes: "Keep this note",
+    websites: [
+      { url: "https://example.com/" },
+      { url: "https://beta.example.com/" },
+    ],
+  }
+  expect(
+    (
+      await request.put(`${backend}/api/accounts/${original.id}`, {
+        headers,
+        data: metadata,
+      })
+    ).ok()
+  ).toBeTruthy()
+  await page.goto(backend)
+  const sidebar = page.getByRole("complementary", { name: "Projects" })
+  await sidebar
+    .getByRole("button", { name: "Fixture app 1", exact: true })
+    .click()
+  const row = page
+    .getByRole("region", { name: "Accounts", exact: true })
+    .getByRole("button", { name: /Fixture account/ })
+  await expect(row).toHaveAttribute("draggable", "true")
+  let moves = 0
+  page.on("request", (req) => {
+    if (
+      req.method() === "PUT" &&
+      req.url().endsWith(`/api/accounts/${original.id}`)
+    )
+      moves++
+  })
+  await row.dragTo(
+    sidebar.getByRole("button", { name: "Fixture app 1", exact: true })
+  )
+  expect(moves).toBe(0)
+  await page.route(
+    `**/api/accounts/${original.id}`,
+    (route) =>
+      route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Move failed" }),
+      }),
+    { times: 1 }
+  )
+  await row.dragTo(
+    sidebar.getByRole("button", { name: "Drop target 0", exact: true })
+  )
+  await expect(page.getByText("Move failed", { exact: true })).toBeVisible()
+  await expect(
+    sidebar.getByRole("button", { name: "Fixture app 1", exact: true })
+  ).toBeVisible()
+  await expect(row).toBeVisible()
+  await row.dragTo(
+    sidebar.getByRole("button", { name: "Drop target 0", exact: true })
+  )
+  await expect(
+    sidebar.getByRole("button", { name: "Drop target 1", exact: true })
+  ).toHaveAttribute("aria-current", "true")
+  await expect(
+    sidebar.getByRole("button", { name: "Fixture app 0", exact: true })
+  ).toBeVisible()
+  const details = page.getByRole("region", { name: "Account details" })
+  await expect(
+    details.getByRole("heading", { name: "Fixture account" })
+  ).toBeVisible()
+  await expect(
+    details.getByText("Keep this note", { exact: true })
+  ).toBeVisible()
+  const saved = (
+    await (await request.get(`${backend}/api/accounts`, { headers })).json()
+  )[0]
+  expect(saved).toMatchObject({
+    id: original.id,
+    project_id: target.id,
+    icon: metadata.icon,
+    notes: metadata.notes,
+    websites: metadata.websites,
+  })
+  const secret = await (
+    await request.post(`${backend}/api/accounts/${original.id}/password`, {
+      headers,
+      data: {},
+    })
+  ).json()
+  expect(secret.password).toBe("fixture-password")
+  expect(moves).toBe(2)
+})
+
+test("expanded emoji picker searches, filters categories and accepts pasted emoji", async ({
+  page,
+}) => {
+  await page.goto(backend)
+  await page.getByRole("button", { name: "Add Project", exact: true }).click()
+  await page.getByRole("button", { name: "Change Icon", exact: true }).click()
+  await page.getByRole("button", { name: "More emojis", exact: true }).click()
+  const search = page.getByRole("textbox", {
+    name: "Search emojis or paste one",
+  })
+  await search.pressSequentially("fire engine")
+  await expect(
+    page.getByRole("button", { name: "Use fire engine emoji", exact: true })
+  ).toBeVisible()
+  await search.fill("india")
+  await expect(
+    page.getByRole("button", { name: "Use flag: India emoji", exact: true })
+  ).toBeVisible()
+  await search.fill("")
+  await page.getByRole("combobox", { name: "Emoji category" }).click()
+  await page.getByRole("option", { name: "Flags", exact: true }).click()
+  await expect(
+    page.getByRole("button", { name: "Use chequered flag emoji", exact: true })
+  ).toBeVisible()
+  await page.screenshot({ path: "test-results/devlogin-emoji-picker.png" })
+  await search.press("Escape")
+  await expect(page.getByRole("dialog", { name: "Choose icon" })).toBeHidden()
+  await page.getByRole("button", { name: "Change icon preview" }).click()
+  await search.fill("🧑🏽‍🚀")
+  await page.getByRole("button", { name: "Use 🧑🏽‍🚀", exact: true }).click()
+  const dialog = page.getByRole("dialog", { name: /^(Add|Edit|Delete) /i })
+  await expect(dialog.getByText("🧑🏽‍🚀", { exact: true })).toBeVisible()
+  await page.getByLabel("Project name", { exact: true }).fill("Astronaut")
+  await page
+    .getByRole("button", { name: "Create Project", exact: true })
+    .click()
+  await expect(dialog).toBeHidden()
+  await expect(
+    page
+      .getByRole("complementary", { name: "Projects" })
+      .getByText("🧑🏽‍🚀", { exact: true })
+  ).toBeVisible()
+})
 test("login editor manages websites, notes, icons and project assignment", async ({
   page,
   request,
@@ -270,7 +424,9 @@ test("login editor manages websites, notes, icons and project assignment", async
   await page
     .getByRole("button", { name: "Create Project", exact: true })
     .click()
-  await expect(page.getByRole("dialog")).toBeHidden()
+  await expect(
+    page.getByRole("dialog", { name: /^(Add|Edit|Delete) /i })
+  ).toBeHidden()
   await page.getByRole("button", { name: "Add Login", exact: true }).click()
   await page.getByLabel("Title", { exact: true }).fill("Shared admin")
   await page
@@ -288,7 +444,9 @@ test("login editor manages websites, notes, icons and project assignment", async
     .getByLabel("Notes", { exact: false })
     .fill("Shared across environments")
   await page.getByRole("button", { name: "Save Login", exact: true }).click()
-  await expect(page.getByRole("dialog")).toBeHidden()
+  await expect(
+    page.getByRole("dialog", { name: /^(Add|Edit|Delete) /i })
+  ).toBeHidden()
   const details = page.getByRole("region", { name: "Account details" })
   await expect(
     details.getByRole("heading", { name: "Shared admin" })
@@ -312,7 +470,9 @@ test("login editor manages websites, notes, icons and project assignment", async
   await page.getByRole("combobox", { name: "Project", exact: true }).click()
   await page.getByRole("option", { name: "Fixture app", exact: false }).click()
   await page.getByRole("button", { name: "Save Login", exact: true }).click()
-  await expect(page.getByRole("dialog")).toBeHidden()
+  await expect(
+    page.getByRole("dialog", { name: /^(Add|Edit|Delete) /i })
+  ).toBeHidden()
   await expect(details.getByRole("link")).toHaveCount(3)
   await expect(details.getByText("Updated note", { exact: true })).toBeVisible()
   await expect(
@@ -323,7 +483,9 @@ test("login editor manages websites, notes, icons and project assignment", async
     .getByRole("button", { name: "Remove website 2", exact: true })
     .click()
   await page.getByRole("button", { name: "Save Login", exact: true }).click()
-  await expect(page.getByRole("dialog")).toBeHidden()
+  await expect(
+    page.getByRole("dialog", { name: /^(Add|Edit|Delete) /i })
+  ).toBeHidden()
   await expect(details.getByRole("link")).toHaveCount(2)
   const { token } = await (await request.get(`${backend}/fixture/token`)).json()
   const accounts = await (

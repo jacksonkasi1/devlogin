@@ -142,6 +142,10 @@ The additive `0002_perfect_blindfold.sql` migration copies legacy project URLs, 
 
 The web workspace keeps the three-panel layout and supports light/dark themes. Emoji or Lucide icons can be chosen without another UI library; logins otherwise try the first website's favicon and fall back to a key icon. Reload the rebuilt unpacked extension after updating; its popup layout is retained, and its matching now uses login websites. For localhost, the existing explicit project identity check still applies.
 
+Administrators can drag a login from the middle list onto another project in the sidebar. The target highlights during dragging; after saving, project counts update and the moved login remains selected in its destination. Its password, websites, notes, and icon are preserved. The project selector in Edit Login remains available for keyboard and touch use.
+
+Click the icon preview or Change Icon for quick choices, then **More emojis** to browse the full bundled catalog with search, categories, and additional results. You can also paste a single emoji, including skin-tone or joined emoji, into the search box and click Use. The shared picker works in the web app and extension; its catalog loads on demand without contacting an emoji service. Data comes from [Unicode's emoji catalog](https://unicode.org/Public/emoji/latest/emoji-test.txt) under the [Unicode data license](packages/ui/src/lib/UNICODE-LICENSE.txt). To update it, run `bun scripts/generate-emoji-data.ts`; the generated data and license are committed to Git.
+
 ## Verification
 
 ```sh
