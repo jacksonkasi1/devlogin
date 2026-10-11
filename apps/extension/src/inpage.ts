@@ -35,7 +35,9 @@ export function inpage(
   const host = document.createElement("devlogin-ui")
   const shadow = host.attachShadow({ mode: "open" })
   const style = node("style", css)
-  shadow.append(node("style", themeCss.replace(":root {", ":host {")), style)
+  // Production CSS is minified to :root{...}; map the selector itself so the
+  // light palette is defined inside the shadow root in either build format.
+  shadow.append(node("style", themeCss.replace(/:root\b/g, ":host")), style)
   document.documentElement.append(host)
   let settings: UiSettings = { theme: "system", submitAfterFill: true }
   const media = matchMedia("(prefers-color-scheme: dark)")

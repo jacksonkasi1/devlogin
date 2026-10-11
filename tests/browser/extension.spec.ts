@@ -892,6 +892,12 @@ test("appearance and submit settings persist and update the inline UI live", asy
   const menu = page.getByRole("region", { name: "DevLogin accounts" })
   await expect(menu).toHaveClass(/dark/)
   const dark = await menu.evaluate((el) => getComputedStyle(el).backgroundColor)
+  // A website's variables must not leak into the extension's light palette.
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty("--popover", "transparent")
+    document.documentElement.style.setProperty("--popover-foreground", "red")
+    document.documentElement.style.setProperty("--muted-foreground", "red")
+  })
   const ui = await popup()
   await ui.getByRole("button", { name: "Settings", exact: true }).click()
   const submit = ui.getByRole("switch", { name: "Submit after autofill" })
@@ -906,6 +912,21 @@ test("appearance and submit settings persist and update the inline UI live", asy
   expect(
     await menu.evaluate((el) => getComputedStyle(el).backgroundColor)
   ).not.toBe(dark)
+  expect(
+    await menu.evaluate((el) => {
+      const canvas = document.createElement("canvas")
+      canvas.width = canvas.height = 1
+      const context = canvas.getContext("2d")!
+      context.fillStyle = getComputedStyle(el).backgroundColor
+      context.fillRect(0, 0, 1, 1)
+      return Array.from(context.getImageData(0, 0, 1, 1).data)
+    })
+  ).toEqual([255, 255, 255, 255])
+  expect(
+    await menu
+      .locator(".account-email")
+      .evaluate((el) => getComputedStyle(el).color)
+  ).not.toBe("rgb(255, 0, 0)")
   await page.screenshot({ path: "test-results/inline-autofill-light.png" })
   await ui.close()
   const reopened = await popup()
