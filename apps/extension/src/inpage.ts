@@ -1,4 +1,8 @@
 import { accountTone } from "./account-tone"
+import { accountWebsites } from "@workspace/shared"
+import { createElement } from "react"
+import { createRoot, type Root } from "react-dom/client"
+import { ItemIcon } from "@workspace/ui/components/login-icon"
 import type { PageContext, Pending, Fill } from "./messages"
 import { send } from "./client"
 import type { UiSettings } from "./ui-settings"
@@ -14,6 +18,7 @@ button,input,select { font:inherit; color:inherit; } button { cursor:pointer; bo
 .dropdown .account-row {display:flex;align-items:center;gap:10px;width:100%;border:0;border-radius:6px;padding:9px 10px;text-align:left;cursor:pointer;transition:background-color 150ms,color 150ms}
 .dropdown .account-row:is(:hover,:focus-visible),.dropdown .manage:is(:hover,:focus-visible) {background:var(--accent);color:var(--accent-foreground);outline:none}
 .project-initials {display:flex;align-items:center;justify-content:center;flex-shrink:0;width:30px;height:30px;border-radius:6px;background:light-dark(hsl(var(--tone) 75% 93%),hsl(var(--tone) 30% 23%));color:light-dark(hsl(var(--tone) 65% 32%),hsl(var(--tone) 65% 78%));font-size:11px;font-weight:600}
+.login-icon {flex-shrink:0}.login-icon > span {position:relative;display:flex;align-items:center;justify-content:center;width:30px;height:30px;border:0;border-radius:6px;background:light-dark(hsl(var(--tone) 75% 93%),hsl(var(--tone) 30% 23%));color:light-dark(hsl(var(--tone) 65% 32%),hsl(var(--tone) 65% 78%));font-size:18px}.login-icon svg {width:16px;height:16px}.login-icon img {position:absolute;width:20px;height:20px;object-fit:contain;background:inherit}
 .account-text {min-width:0}.account-label,.account-email {display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.account-label {font-weight:500}.account-email {font-size:12px;color:var(--muted-foreground)}
 .dropdown-footer {display:flex;justify-content:flex-end;padding:2px 4px}.dropdown .manage {display:flex;align-items:center;justify-content:center;width:26px;height:26px;padding:4px;border:0;border-radius:5px;cursor:pointer;transition:background-color 150ms,color 150ms}
 .muted {color:light-dark(#666,#aaa);font-size:12px}.prompt {width:320px;right:16px;top:16px}.prompt h2{font-size:16px;margin:0 0 8px}.prompt p{margin:6px 0;overflow-wrap:anywhere}.prompt label {display:block;margin-top:10px}.prompt input,.prompt select {display:block;width:100%;margin:5px 0;padding:8px;background:transparent;border:1px solid light-dark(#ddd,#555);border-radius:8px}.actions{display:flex;gap:8px;margin-top:14px}.actions button{flex:1}.error{color:light-dark(#b91c1c,#fca5a5)}
@@ -61,7 +66,10 @@ export function inpage(
   let prompt: HTMLElement | null = null
   let promptId = ""
   let expiry: ReturnType<typeof setTimeout> | undefined
+  const iconRoots: Root[] = []
   function closeSuggestions() {
+    for (const root of iconRoots) root.unmount()
+    iconRoots.length = 0
     suggestion?.remove()
     suggestion = null
     activate.clear()
@@ -101,12 +109,6 @@ export function inpage(
       if (event.target instanceof Element && event.target.closest("button"))
         event.preventDefault()
     })
-    const initials = context.project.name
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((part) => part[0] ?? "")
-      .join("")
-      .toUpperCase()
     for (const account of context.accounts) {
       const button = node(
         "button",
@@ -117,8 +119,16 @@ export function inpage(
       button.style.setProperty("--tone", String(accountTone(account).hue))
       button.type = "button"
       button.setAttribute("aria-label", `${account.label} · ${account.email}`)
-      const icon = node("span", initials, "project-initials")
+      const icon = node("span", "", "login-icon")
       icon.setAttribute("aria-hidden", "true")
+      const root = createRoot(icon)
+      iconRoots.push(root)
+      root.render(
+        createElement(ItemIcon, {
+          icon: account.icon,
+          website: accountWebsites(account, context.project)[0]?.url,
+        })
+      )
       const text = node("span", "", "account-text")
       text.append(
         node("span", account.label, "account-label"),

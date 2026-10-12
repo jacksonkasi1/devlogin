@@ -1,14 +1,7 @@
 import { useState } from "react"
-import {
-  Folder,
-  KeyRound,
-  Terminal,
-  Globe,
-  Code,
-  Database,
-  Plus,
-  ArrowLeft,
-} from "lucide-react"
+import { ItemIcon, itemIcons as icons } from "./login-icon"
+export { ItemIcon } from "./login-icon"
+import { Plus, ArrowLeft } from "lucide-react"
 import { Button } from "./button"
 import { Input } from "./input"
 import {
@@ -19,14 +12,6 @@ import {
   SelectItem,
 } from "./select"
 import { Popover, PopoverTrigger, PopoverContent } from "./popover"
-const icons = {
-  folder: Folder,
-  key: KeyRound,
-  terminal: Terminal,
-  globe: Globe,
-  code: Code,
-  database: Database,
-}
 const emoji = [
   "📁",
   "🚀",
@@ -41,53 +26,16 @@ const emoji = [
   "🦚",
   "⚡",
 ]
-export function ItemIcon({
-  icon,
-  website,
-  large = false,
-  folder = false,
-  small = false,
-}: {
-  icon?: string
-  website?: string
-  large?: boolean
-  folder?: boolean
-  small?: boolean
-}) {
-  const [failed, setFailed] = useState<string>()
-  const Icon = icons[icon as keyof typeof icons] ?? (folder ? Folder : KeyRound)
-  const favicon =
-    !icon && website ? new URL("/favicon.ico", website).href : undefined
-  return (
-    <span
-      aria-hidden
-      className={`relative flex shrink-0 items-center justify-center rounded-md border bg-muted text-muted-foreground ${large ? "size-14 text-2xl" : small ? "size-6 text-sm" : "size-8 text-base"}`}
-    >
-      {icon && !(icon in icons) ? (
-        icon
-      ) : (
-        <Icon className={large ? "size-6" : "size-4"} />
-      )}
-      {favicon && failed !== favicon && (
-        <img
-          src={favicon}
-          referrerPolicy="no-referrer"
-          alt=""
-          className="absolute size-5 bg-muted object-contain"
-          onError={() => setFailed(favicon)}
-        />
-      )}
-    </span>
-  )
-}
 export function IconPicker({
   value,
   onChange,
   folder = false,
+  website,
 }: {
   value: string
   onChange: (icon: string) => void
   folder?: boolean
+  website?: string
 }) {
   const [open, setOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -139,7 +87,13 @@ export function IconPicker({
         className="rounded-md focus-visible:outline-2 focus-visible:outline-ring"
         onClick={() => setOpen(true)}
       >
-        <ItemIcon icon={value} large folder={folder} />
+        <ItemIcon
+          key={website}
+          icon={value}
+          website={website}
+          large
+          folder={folder}
+        />
       </button>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger

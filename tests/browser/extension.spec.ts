@@ -345,6 +345,52 @@ async function loginPage() {
   }).toPass()
   return page
 }
+
+test("inline suggestions show website favicons by default and saved emoji overrides", async () => {
+  await api("/accounts/fixture-account", "PUT", {
+    project_id: "fixture-project",
+    label: "Fixture account",
+    email: "login@example.com",
+    login_type: "password",
+    websites: [{ url: fixture }],
+    icon: "",
+  })
+  await api("/accounts", "POST", {
+    project_id: "fixture-project",
+    label: "Emoji account",
+    email: "emoji@example.com",
+    login_type: "password",
+    password: "emoji-secret",
+    websites: [{ url: fixture }],
+    icon: "🚀",
+  })
+  const ui = await popup()
+  await ui.close()
+  const page = await loginPage()
+  const defaultRow = page.getByRole("button", {
+    name: "Fixture account · login@example.com",
+    exact: true,
+  })
+  await expect(defaultRow.locator("img")).toHaveAttribute(
+    "src",
+    `${fixture}/favicon.ico`
+  )
+  await expect
+    .poll(() =>
+      defaultRow
+        .locator("img")
+        .evaluate((img: HTMLImageElement) => img.naturalWidth)
+    )
+    .toBe(32)
+  const emojiRow = page.getByRole("button", {
+    name: "Emoji account · emoji@example.com",
+    exact: true,
+  })
+  await expect(emojiRow.locator(".login-icon")).toHaveText("🚀")
+  await expect(emojiRow.locator("img")).toHaveCount(0)
+
+  await page.close()
+})
 test("in-page dropdown opens on focus, highlights the whole row, and fills both fields", async () => {
   const page = await loginPage()
   const menu = page.getByRole("region", { name: "DevLogin accounts" })
