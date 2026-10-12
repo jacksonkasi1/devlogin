@@ -134,6 +134,11 @@ Bun.serve({
         headers: { "Content-Type": "application/javascript" },
       })
     if (url.pathname === "/health") return new Response("ok")
+    if (url.pathname === "/favicon.ico")
+      return new Response(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="orange"/></svg>',
+        { headers: { "Content-Type": "image/svg+xml" } }
+      )
     if (
       url.searchParams.has("change") ||
       url.searchParams.has("signup") ||

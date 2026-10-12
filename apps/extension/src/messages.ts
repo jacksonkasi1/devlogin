@@ -16,6 +16,7 @@ export type Message =
   | { type: "configure"; origin: string }
   | { type: "api"; path: string; method?: string; body?: unknown }
   | { type: "manual"; accountId: string; submit: boolean }
+  | { type: "open-fill"; accountId: string; submit: boolean }
   | { type: "context" }
   | { type: "automatic"; projectId: string; accountId: string }
   | { type: "page" }
@@ -34,6 +35,7 @@ export type Message =
       label?: string
       projectName?: string
       projectId?: string | null
+      mode?: "new" | "update"
     }
   | { type: "dismiss"; id: string }
   | { type: "manage" }

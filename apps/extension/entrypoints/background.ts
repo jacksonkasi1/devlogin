@@ -24,6 +24,7 @@ import { registerSites, forbidden } from "../src/site-permissions"
 export default defineBackground(() => {
   let cache: { data: Sync; at: number } | null = null
   const reservations = new Set<string>()
+  const openingLogins = new Set<number>()
   void registerSites().catch(() => {})
   browser.permissions.onAdded.addListener(() => {
     void registerSites().catch(() => {})
@@ -69,6 +70,7 @@ export default defineBackground(() => {
     tabId: number,
     force = false
   ): Promise<Context> {
+    if (openingLogins.has(tabId)) return null
     const config = await configuration()
     const { excluded = [] } = await browser.storage.local.get("excluded")
     if (forbidden(address, config.origin, excluded as string[])) return null
@@ -191,7 +193,8 @@ export default defineBackground(() => {
   })
   async function handle(
     message: Message,
-    sender: Browser.runtime.MessageSender
+    sender: Browser.runtime.MessageSender,
+    targetTab?: Browser.tabs.Tab
   ): Promise<unknown> {
     if (sender.id !== browser.runtime.id) throw new Error("Untrusted sender")
     const trusted = sender.url?.startsWith(browser.runtime.getURL("/"))
@@ -383,6 +386,55 @@ export default defineBackground(() => {
         if (message.method && message.method !== "GET") cache = null
         return result
       }
+      case "open-fill": {
+        const data = await sync(true)
+        const account = data.accounts.find(
+          (item) => item.id === message.accountId
+        )
+        const folder = data.projects.find(
+          (item) => item.id === account?.project_id
+        )
+        if (!account || !folder) throw new Error("Login no longer exists")
+        const project = accountProject(folder, account)
+        if (!project.urls.length)
+          throw new Error("Add a website to this login first")
+        const url = loginUrl(project, project.urls[0]!)
+        const { excluded = [] } = await browser.storage.local.get("excluded")
+        if (
+          forbidden(url, (await configuration()).origin, excluded as string[])
+        )
+          throw new Error("DevLogin is disabled on this website")
+        if (
+          !(await browser.permissions.contains({
+            origins: [new URL(url).origin + "/*"],
+          }))
+        )
+          throw new Error("Enable DevLogin on the saved website first")
+        await registerSites()
+        const tab = await browser.tabs.create({ url })
+        if (!tab.id) throw new Error("Could not open website")
+        openingLogins.add(tab.id)
+        try {
+          // Wait for the registered content script, then use the same guarded fill flow.
+          for (let attempt = 0; attempt < 40; attempt++) {
+            const current = await browser.tabs.get(tab.id)
+            if (current.status === "complete") {
+              await new Promise((resolve) => setTimeout(resolve, 250))
+              return await handle(
+                { ...message, type: "manual" },
+                sender,
+                current
+              )
+            }
+            await new Promise((resolve) => setTimeout(resolve, 250))
+          }
+          throw new Error(
+            "Website is still loading. Open DevLogin there to fill."
+          )
+        } finally {
+          openingLogins.delete(tab.id)
+        }
+      }
       case "manual": {
         const data = await sync(true)
         const account = data.accounts.find(
@@ -395,10 +447,11 @@ export default defineBackground(() => {
           folder && account ? accountProject(folder, account) : undefined
         if (!account || !project)
           throw new Error("Account no longer exists. Refresh and try again.")
-        const [tab] = await browser.tabs.query({
+        const [activeTab] = await browser.tabs.query({
           active: true,
           currentWindow: true,
         })
+        const tab = targetTab ?? activeTab
         if (!tab?.id || !tab.url) throw new Error("No active website")
         const { excluded = [] } = await browser.storage.local.get("excluded")
         if (

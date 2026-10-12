@@ -1,5 +1,31 @@
 import { z } from "zod"
 
+// Share favicon selection between the dashboard, popup and in-page suggestions.
+// Never send paths, queries or local hostnames to the public fallback service.
+export function websiteFavicons(website?: string): string[] {
+  if (!website) return []
+  try {
+    const url = new URL(website)
+    if (!["https:", "http:"].includes(url.protocol)) return []
+    const direct = new URL("/favicon.ico", url.origin).href
+    const local =
+      !url.hostname.includes(".") ||
+      /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[)/.test(
+        url.hostname
+      ) ||
+      /\.(localhost|local|internal)$/.test(url.hostname)
+    return local
+      ? [direct]
+      : [
+          `https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=64`,
+          `https://devlogin.peacockindia.in/api/favicon?url=${encodeURIComponent(url.origin)}`,
+          direct,
+        ]
+  } catch {
+    return []
+  }
+}
+
 const applicationUrl = z
   .string()
   .url()

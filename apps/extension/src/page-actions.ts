@@ -232,14 +232,15 @@ export function pageActions(deps: {
             })
             candidate.project = project
           }
-          const account = candidate.matches.length
-            ? context.accounts.find(
-                (a) =>
-                  a.id === message.accountId &&
-                  candidate.matches.some((m) => m.id === a.id)
-              )
-            : undefined
-          if (candidate.matches.length && !account)
+          const account =
+            candidate.matches.length && message.mode !== "new"
+              ? context.accounts.find(
+                  (a) =>
+                    a.id === message.accountId &&
+                    candidate.matches.some((m) => m.id === a.id)
+                )
+              : undefined
+          if (candidate.matches.length && message.mode !== "new" && !account)
             throw new Error("Choose the account to update")
           const body = account
             ? { ...account, password: candidate.password }

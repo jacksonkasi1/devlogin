@@ -1,6 +1,116 @@
 import { test, expect } from "@playwright/test"
 
 const backend = "http://localhost:8799"
+
+test("missing Google favicon falls back to the icon declared by the website", async ({
+  page,
+}) => {
+  await page.route(
+    "https://www.google.com/s2/favicons?domain=sandbox.vizfleet.com&sz=64",
+    (route) => route.fulfill({ status: 404 })
+  )
+  await page.route(
+    "https://devlogin.peacockindia.in/api/favicon?url=https%3A%2F%2Fsandbox.vizfleet.com",
+    (route) =>
+      route.fulfill({
+        contentType: "image/svg+xml",
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="red"/></svg>',
+      })
+  )
+  await page.goto(backend)
+  await page.getByRole("button", { name: "Fixture app 1" }).click()
+  await page.getByRole("button", { name: "Add Login", exact: true }).click()
+  await page
+    .getByLabel("Website URL 1", { exact: true })
+    .fill("https://sandbox.vizfleet.com/dashboard/login")
+  const preview = page.getByRole("button", { name: "Change icon preview" })
+  await expect(preview.locator("img")).toHaveAttribute("src", /\/api\/favicon/)
+  await expect
+    .poll(() =>
+      preview
+        .locator("img")
+        .evaluate((img: HTMLImageElement) => img.naturalWidth)
+    )
+    .toBe(64)
+})
+
+test("website favicon defaults on web creation and persists after clearing an emoji", async ({
+  page,
+  request,
+}) => {
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="orange"/></svg>'
+  await page.route("https://favicon.example.com/favicon.ico", (route) =>
+    route.fulfill({ status: 404 })
+  )
+  await page.route(
+    "https://www.google.com/s2/favicons?domain=favicon.example.com&sz=64",
+    (route) => route.fulfill({ contentType: "image/svg+xml", body: svg })
+  )
+  await page.goto(backend)
+  await page.getByRole("button", { name: "Fixture app 1" }).click()
+  await page.getByRole("button", { name: "Add Login", exact: true }).click()
+  await page.getByLabel("Title", { exact: true }).fill("Favicon login")
+  await page
+    .getByLabel("Username / Email", { exact: true })
+    .fill("favicon@example.com")
+  await page.getByLabel("Password", { exact: true }).fill("favicon-secret")
+  const website = page.getByLabel("Website URL 1", { exact: true })
+  await website.fill("https://")
+  await expect(website).toBeVisible()
+  await website.fill("https://favicon.example.com/login")
+  const preview = page.getByRole("button", { name: "Change icon preview" })
+  await expect(preview.locator("img")).toHaveAttribute(
+    "src",
+    /google\.com\/s2\/favicons/
+  )
+  await expect
+    .poll(() =>
+      preview
+        .locator("img")
+        .evaluate((img: HTMLImageElement) => img.naturalWidth)
+    )
+    .toBe(32)
+  await page.getByRole("button", { name: "Save Login", exact: true }).click()
+  const details = page.getByRole("region", { name: "Account details" })
+  await expect(details.locator("img")).toHaveAttribute(
+    "src",
+    /google\.com\/s2\/favicons/
+  )
+  await details.getByRole("button", { name: "Edit", exact: true }).click()
+  await page.getByRole("button", { name: "Change Icon", exact: true }).click()
+  await page.getByRole("button", { name: "Use 🚀 icon", exact: true }).click()
+  await expect(preview).toHaveText("🚀")
+  await expect(preview.locator("img")).toHaveCount(0)
+  await page.getByRole("button", { name: "Save Login", exact: true }).click()
+  await details.getByRole("button", { name: "Edit", exact: true }).click()
+  await expect(preview).toHaveText("🚀")
+  await page.getByRole("button", { name: "Change Icon", exact: true }).click()
+  await page
+    .getByRole("button", { name: "Use website favicon", exact: true })
+    .click()
+  await expect(preview.locator("img")).toHaveAttribute("src", /favicons/)
+  await page.getByRole("button", { name: "Save Login", exact: true }).click()
+  await page.reload()
+  await page.getByRole("button", { name: "Fixture app 2" }).click()
+  await page
+    .getByRole("region", { name: "Accounts", exact: true })
+    .getByRole("button", { name: /Favicon login/ })
+    .click()
+  await details.getByRole("button", { name: "Edit", exact: true }).click()
+  await expect(preview.locator("img")).toHaveAttribute("src", /favicons/)
+  const { token } = await (await request.get(`${backend}/fixture/token`)).json()
+  const accounts = await (
+    await request.get(`${backend}/api/accounts`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  ).json()
+  expect(
+    accounts.find(
+      (account: { label: string }) => account.label === "Favicon login"
+    ).icon
+  ).toBe("")
+})
 test.beforeEach(async ({ context, request }) => {
   await request.get(`${backend}/fixture/reset`)
   const { token } = await (await request.get(`${backend}/fixture/token`)).json()

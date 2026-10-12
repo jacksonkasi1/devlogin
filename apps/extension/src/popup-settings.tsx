@@ -5,13 +5,6 @@ import { send } from "./client"
 import { Button } from "@workspace/ui/components/button"
 import { Label } from "@workspace/ui/components/label"
 import { Switch } from "@workspace/ui/components/switch"
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@workspace/ui/components/card"
 import { Field, Choice } from "@workspace/ui/components/credential-editors"
 export function PopupSettings({
   user,
@@ -35,16 +28,16 @@ export function PopupSettings({
   permission: (wide?: boolean) => Promise<void>
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Settings</CardTitle>
-        <CardDescription>
+    <section className="py-4">
+      <div className="mb-5">
+        <h2 className="text-base font-semibold">Settings</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
           {user
             ? `${user.name} · ${user.email}`
             : "Connect to your DevLogin backend"}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+        </p>
+      </div>
+      <div className="space-y-4">
         <Field
           name="origin"
           label="Backend origin"
@@ -72,8 +65,7 @@ export function PopupSettings({
         <div className="space-y-2">
           <Label>Website monitoring</Label>
           <p className="text-xs text-muted-foreground">
-            Enable individual websites from Home. Browser-wide monitoring is
-            optional and never captures Google passwords.
+            Optional browser-wide access.
           </p>
           <Button
             variant="outline"
@@ -112,7 +104,7 @@ export function PopupSettings({
             </div>
           ))}
         </div>
-        <div className="space-y-2 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+        <div className="space-y-2 border-y py-3">
           <div className="flex items-center justify-between gap-3">
             <Label htmlFor="submit-after-fill">Submit after autofill</Label>
             <Switch
@@ -130,8 +122,7 @@ export function PopupSettings({
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            Selecting an account fills and submits the login form. Turn off to
-            fill only. Complete any required fields or CAPTCHA first.
+            Submit the form after filling.
           </p>
         </div>
         <Label>Appearance</Label>
@@ -144,9 +135,7 @@ export function PopupSettings({
           }))}
           onChange={setTheme}
         />
-        <p className="text-xs break-all text-muted-foreground">
-          Extension ID: {browser.runtime.id}
-        </p>
+
         {user && (
           <Button
             disabled={busy}
@@ -158,7 +147,7 @@ export function PopupSettings({
             Sign out
           </Button>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   )
 }

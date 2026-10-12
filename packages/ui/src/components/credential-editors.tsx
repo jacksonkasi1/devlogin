@@ -211,7 +211,11 @@ export function AccountEditor({
       }}
     >
       <div className="flex items-center gap-4">
-        <IconPicker value={icon} onChange={setIcon} />
+        <IconPicker
+          value={icon}
+          onChange={setIcon}
+          website={websites.find((site) => site.url.trim())?.url}
+        />
         <div className="min-w-0 flex-1">
           <Field
             name="label"

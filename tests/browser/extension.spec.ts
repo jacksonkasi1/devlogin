@@ -83,7 +83,7 @@ test.beforeEach(async () => {
   )
   const ui = await popup()
   await expect(
-    ui.getByText("No matching project", { exact: true })
+    ui.getByRole("button", { name: "Project filter", exact: true })
   ).toBeVisible()
   await ui.close()
 })
@@ -110,7 +110,7 @@ async function popup() {
   const page = await context.newPage()
   await page.goto(`chrome-extension://${extensionId}/popup.html`)
   await expect(
-    page.getByRole("button", { name: "Projects", exact: true })
+    page.getByRole("button", { name: "Project filter", exact: true })
   ).toBeVisible()
   return page
 }
@@ -140,7 +140,7 @@ test("auto-login fills a React controlled form, submits once, and stops reload l
   await automatic(true)
   const fresh = await popup()
   await expect(
-    fresh.getByText("No matching project", { exact: true })
+    fresh.getByRole("button", { name: "Project filter", exact: true })
   ).toBeVisible()
   await fresh.close()
   const page = await context.newPage()
@@ -206,7 +206,7 @@ test("custom selectors handle fields outside default detection", async () => {
   await automatic(true)
   const fresh = await popup()
   await expect(
-    fresh.getByText("No matching project", { exact: true })
+    fresh.getByRole("button", { name: "Project filter", exact: true })
   ).toBeVisible()
   await fresh.close()
   const page = await context.newPage()
@@ -223,8 +223,11 @@ test("custom selectors handle fields outside default detection", async () => {
 })
 test("popup can add, edit, and delete shared projects and accounts", async () => {
   const ui = await popup()
-  await ui.getByRole("button", { name: "Projects", exact: true }).click()
-  await ui.getByRole("button", { name: "Add", exact: true }).click()
+  await ui.getByRole("button", { name: "Project filter", exact: true }).click()
+  await ui
+    .getByRole("menuitem", { name: "Manage Projects", exact: true })
+    .click()
+  await ui.getByRole("button", { name: "Create Project", exact: true }).click()
   await ui.getByRole("button", { name: "Change icon preview" }).click()
   await ui.getByRole("button", { name: "More emojis", exact: true }).click()
   await ui
@@ -237,28 +240,27 @@ test("popup can add, edit, and delete shared projects and accounts", async () =>
     .getByLabel("Project name", { exact: true })
     .fill("Browser-created project")
   await ui.getByRole("button", { name: /Create Project|Save Project/ }).click()
-  await expect(
-    ui.getByRole("heading", { name: "Browser-created project" })
-  ).toBeVisible()
-  await ui.getByRole("button", { name: "Add account" }).click()
+  await expect(ui.getByRole("button", { name: "Project filter" })).toBeVisible()
+  await ui.getByRole("button", { name: "Logins", exact: true }).click()
+  await ui.getByRole("button", { name: "Add Login", exact: true }).click()
   await ui.getByLabel("Title", { exact: true }).fill("Browser account")
   await ui
     .getByLabel("Username / Email", { exact: true })
     .fill("browser@example.com")
   await ui.getByLabel("Password", { exact: true }).fill("browser-password")
   await ui.getByRole("button", { name: "Save Login" }).click()
-  await expect(ui.getByText("Browser account", { exact: true })).toBeVisible()
-  await ui.getByRole("button", { name: "Actions for Browser account" }).click()
-  await ui.getByRole("menuitem", { name: "Edit", exact: true }).click()
+  await expect(
+    ui.getByRole("heading", { name: "Browser account", exact: true })
+  ).toBeVisible()
+  await ui.getByRole("button", { name: "Login actions" }).click()
+  await ui.getByRole("menuitem", { name: "Edit login", exact: true }).click()
   await ui.getByLabel("Title", { exact: true }).fill("Updated browser account")
   await ui.getByRole("button", { name: "Save Login" }).click()
   await expect(
-    ui.getByText("Updated browser account", { exact: true })
+    ui.getByRole("heading", { name: "Updated browser account", exact: true })
   ).toBeVisible()
-  await ui
-    .getByRole("button", { name: "Actions for Updated browser account" })
-    .click()
-  await ui.getByRole("menuitem", { name: "Delete", exact: true }).click()
+  await ui.getByRole("button", { name: "Login actions" }).click()
+  await ui.getByRole("menuitem", { name: "Delete login", exact: true }).click()
   await ui
     .getByRole("dialog")
     .getByRole("button", { name: "Delete", exact: true })
@@ -345,6 +347,52 @@ async function loginPage() {
   }).toPass()
   return page
 }
+
+test("inline suggestions show website favicons by default and saved emoji overrides", async () => {
+  await api("/accounts/fixture-account", "PUT", {
+    project_id: "fixture-project",
+    label: "Fixture account",
+    email: "login@example.com",
+    login_type: "password",
+    websites: [{ url: fixture }],
+    icon: "",
+  })
+  await api("/accounts", "POST", {
+    project_id: "fixture-project",
+    label: "Emoji account",
+    email: "emoji@example.com",
+    login_type: "password",
+    password: "emoji-secret",
+    websites: [{ url: fixture }],
+    icon: "🚀",
+  })
+  const ui = await popup()
+  await ui.close()
+  const page = await loginPage()
+  const defaultRow = page.getByRole("button", {
+    name: "Fixture account · login@example.com",
+    exact: true,
+  })
+  await expect(defaultRow.locator("img")).toHaveAttribute(
+    "src",
+    `${fixture}/favicon.ico`
+  )
+  await expect
+    .poll(() =>
+      defaultRow
+        .locator("img")
+        .evaluate((img: HTMLImageElement) => img.naturalWidth)
+    )
+    .toBe(32)
+  const emojiRow = page.getByRole("button", {
+    name: "Emoji account · emoji@example.com",
+    exact: true,
+  })
+  await expect(emojiRow.locator(".login-icon")).toHaveText("🚀")
+  await expect(emojiRow.locator("img")).toHaveCount(0)
+
+  await page.close()
+})
 test("in-page dropdown opens on focus, highlights the whole row, and fills both fields", async () => {
   const page = await loginPage()
   const menu = page.getByRole("region", { name: "DevLogin accounts" })
@@ -475,9 +523,7 @@ test("manual new login is confirmed before saving; ciphertext sync and web see i
   await page.getByRole("button", { name: "Login", exact: true }).click()
   const prompt = page.getByRole("dialog", { name: "Save login to DevLogin?" })
   await expect(prompt).toBeVisible()
-  await expect(prompt).toContainText(
-    "Authentication success has not been verified"
-  )
+  await expect(prompt).toContainText("Sign-in not verified")
   await page.screenshot({ path: "test-results/save-login-prompt.png" })
   expect((await savedAccounts()).length).toBe(1)
   // The host website must not be able to confirm a save through a scripted click.
@@ -488,6 +534,7 @@ test("manual new login is confirmed before saving; ciphertext sync and web see i
       .click()
   )
   expect((await savedAccounts()).length).toBe(1)
+  await prompt.getByRole("button", { name: "Edit", exact: true }).click()
   await prompt.getByLabel("Account label").fill("New developer")
   await prompt.getByRole("button", { name: "Save login", exact: true }).click()
   await expect(page.getByText("Login saved", { exact: true })).toBeVisible()
@@ -597,7 +644,7 @@ test("signup saves a new account and reset password allows choosing an existing 
     name: "Update password in DevLogin?",
   })
   await expect(prompt).toBeVisible()
-  await prompt.getByLabel("Account to update").selectOption(created.id)
+  await prompt.getByRole("radio", { name: new RegExp(created.email) }).check()
   await prompt.getByRole("button", { name: "Update saved" }).click()
   await expect(
     page.getByText("Password updated", { exact: true })
@@ -707,7 +754,10 @@ test("web creates, edits and deletes accounts and projects with extension sync",
   ).toBeVisible()
   await web.screenshot({ path: "test-results/web-account-management.png" })
   const ui = await popup()
-  await ui.getByRole("button", { name: "Projects", exact: true }).click()
+  await ui.getByRole("button", { name: "Project filter", exact: true }).click()
+  await ui
+    .getByRole("menuitem", { name: "Manage Projects", exact: true })
+    .click()
   await expect(
     ui.getByText("Web managed project", { exact: true })
   ).toBeVisible()
@@ -795,7 +845,7 @@ test("browser restart preserves authentication and site registration without per
   await launch()
   const ui = await popup()
   await expect(
-    ui.getByText("Connected · Internal workspace", { exact: true })
+    ui.getByRole("button", { name: "Project filter", exact: true })
   ).toBeVisible()
   const stored = await worker.evaluate(async () => {
     // @ts-expect-error Chrome global
@@ -899,7 +949,8 @@ test("appearance and submit settings persist and update the inline UI live", asy
     document.documentElement.style.setProperty("--muted-foreground", "red")
   })
   const ui = await popup()
-  await ui.getByRole("button", { name: "Settings", exact: true }).click()
+  await ui.getByRole("button", { name: "Settings menu", exact: true }).click()
+  await ui.getByRole("menuitem", { name: "Settings", exact: true }).click()
   const submit = ui.getByRole("switch", { name: "Submit after autofill" })
   await expect(submit).not.toBeChecked()
   await submit.click()
@@ -930,7 +981,12 @@ test("appearance and submit settings persist and update the inline UI live", asy
   await page.screenshot({ path: "test-results/inline-autofill-light.png" })
   await ui.close()
   const reopened = await popup()
-  await reopened.getByRole("button", { name: "Settings", exact: true }).click()
+  await reopened
+    .getByRole("button", { name: "Settings menu", exact: true })
+    .click()
+  await reopened
+    .getByRole("menuitem", { name: "Settings", exact: true })
+    .click()
   await expect(
     reopened.getByRole("combobox", { name: "Appearance" })
   ).toContainText("Light")
@@ -997,9 +1053,12 @@ test("reused localhost port requires matching app metadata before filling", asyn
   ).not.toBeVisible()
   const ui = await popup()
   await activate(page)
-  await ui.getByRole("button", { name: "Refresh", exact: true }).click()
+  await ui.getByRole("button", { name: "Settings menu", exact: true }).click()
+  await ui.getByRole("menuitem", { name: "Refresh", exact: true }).click()
+  await ui.getByRole("button", { name: "Settings menu", exact: true }).click()
+  await ui.getByRole("menuitem", { name: "Settings", exact: true }).click()
   await expect(
-    ui.getByText("No matching project", { exact: true })
+    ui.getByRole("button", { name: "Project filter", exact: true })
   ).toBeVisible()
   await ui.getByRole("combobox", { name: "Local project", exact: true }).click()
   await ui.getByRole("option", { name: "Other local app", exact: true }).click()
@@ -1181,4 +1240,110 @@ test("one login fills multiple configured websites and shares password updates",
   expect(records.filter((a) => a.id === account.id)).toHaveLength(1)
   const record = records.find((a) => a.id === account.id)!
   expect(record.websites).toHaveLength(2)
+})
+
+test("compact popup filters logins, updates details, copies and masks secrets without overflow", async () => {
+  const project = await api("/projects", "POST", {
+    name: "Second project",
+    icon: "📚",
+  })
+  await api("/accounts", "POST", {
+    project_id: project.id,
+    label: "Second login",
+    email: "second@example.com",
+    password: "second-secret",
+    login_type: "password",
+    websites: [
+      { url: "https://example.com" },
+      { url: "https://beta.example.com" },
+    ],
+    notes: "A short note",
+  })
+  const ui = await popup()
+  await ui.locator(".login-row").filter({ hasText: "Second login" }).click()
+  await expect(
+    ui.getByRole("heading", { name: "Second login", exact: true })
+  ).toBeVisible()
+  await expect(ui.locator(".login-details")).toContainText("A short note")
+  await expect(ui.locator(".login-details")).toContainText(
+    "https://beta.example.com"
+  )
+  await ui.getByRole("button", { name: "Show password", exact: true }).click()
+  await expect(ui.locator(".login-details")).toContainText("second-secret")
+  await ui.getByRole("button", { name: "Hide password", exact: true }).click()
+  await expect(ui.locator(".login-details")).not.toContainText("second-secret")
+  await ui.getByRole("button", { name: "Copy username", exact: true }).click()
+  await expect(ui.getByText("Username copied", { exact: true })).toBeVisible()
+  await ui.getByRole("button", { name: "Copy password", exact: true }).click()
+  await expect(ui.getByText("Password copied", { exact: true })).toBeVisible()
+  await ui.getByLabel("Search logins").fill("beta.example.com")
+  await expect(ui.locator(".login-row")).toHaveCount(1)
+  await ui.getByLabel("Search logins").fill("")
+  await ui.getByRole("button", { name: "Project filter" }).click()
+  await ui.getByRole("menuitem", { name: /Second project/ }).click()
+  await expect(ui.locator(".login-row")).toHaveCount(1)
+  await ui.getByLabel("Search logins").click()
+  await ui.screenshot({ path: "test-results/extension-popup-dark.png" })
+  expect(
+    await ui
+      .locator(".popup-shell")
+      .evaluate((el) => el.scrollHeight <= el.clientHeight)
+  ).toBe(true)
+  expect(
+    await ui.locator("body").evaluate((el) => el.scrollWidth <= el.clientWidth)
+  ).toBe(true)
+  await ui.getByRole("button", { name: "Settings menu" }).click()
+  await ui.getByRole("menuitem", { name: "Settings", exact: true }).click()
+  await ui.getByRole("combobox", { name: "Appearance" }).click()
+  await ui.getByRole("option", { name: "Light", exact: true }).click()
+  await ui.getByRole("button", { name: "Logins", exact: true }).click()
+  await expect(ui.locator("html")).not.toHaveClass(/dark/)
+  await ui.screenshot({ path: "test-results/extension-popup-light.png" })
+  await ui.close()
+})
+
+test("save prompt can create a separate login instead of updating an existing match", async () => {
+  const page = await loginPage()
+  await page.locator("#email").fill("login@example.com")
+  await page.locator("#password").fill("separate-secret")
+  await page.getByRole("button", { name: "Login", exact: true }).click()
+  const prompt = page.getByRole("dialog", {
+    name: "Update password in DevLogin?",
+  })
+  await expect(prompt.getByRole("radio")).toBeChecked()
+  await prompt.getByRole("tab", { name: "New Login", exact: true }).click()
+  await prompt.getByRole("button", { name: "Edit", exact: true }).click()
+  await prompt.getByLabel("Account label").fill("Separate login")
+  await prompt.getByRole("button", { name: "Save login", exact: true }).click()
+  await expect(page.getByText("Login saved", { exact: true })).toBeVisible()
+  const saved = await savedAccounts()
+  expect(saved).toHaveLength(2)
+  expect(saved.find((a) => a.label === "Separate login")?.email).toBe(
+    "login@example.com"
+  )
+  expect(
+    (await api("/accounts/fixture-account/password", "POST", {})).password
+  ).toBe("fixture-password")
+  await page.close()
+})
+
+test("Open and Fill opens the configured website and fills the selected login", async () => {
+  await automatic(true)
+  const ui = await popup()
+  const opened = context.waitForEvent("page")
+  const result = ui.evaluate(async () => {
+    // @ts-expect-error Chrome global
+    return chrome.runtime.sendMessage({
+      type: "open-fill",
+      accountId: "fixture-account",
+      submit: false,
+    })
+  })
+  const page = await opened
+  expect((await result).ok).toBe(true)
+  await expect(page.locator("#email")).toHaveValue("login@example.com")
+  await expect(page.locator("#password")).toHaveValue("fixture-password")
+  expect(await page.locator("body").getAttribute("data-count")).toBeNull()
+  await page.close()
+  await ui.close()
 })

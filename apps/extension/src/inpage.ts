@@ -1,10 +1,15 @@
 import { accountTone } from "./account-tone"
+import { accountWebsites } from "@workspace/shared"
+import { createElement } from "react"
+import { createRoot, type Root } from "react-dom/client"
+import { ItemIcon } from "@workspace/ui/components/login-icon"
 import type { PageContext, Pending, Fill } from "./messages"
 import { send } from "./client"
 import type { UiSettings } from "./ui-settings"
 import themeCss from "./inline-theme.css?inline"
 
 const css = `
+:host [hidden] { display:none !important; }
 :host { all: initial; color-scheme: light dark; }
 * { box-sizing: border-box; }
 .surface { position: fixed; z-index: 2147483647; font: 13px/1.45 Inter, system-ui, sans-serif; color: light-dark(#171717,#fafafa); background:light-dark(#fff,#202020); border:1px solid light-dark(#dedede,#444); border-radius:14px; box-shadow:0 6px 24px #0002; padding:14px; }
@@ -13,10 +18,17 @@ button,input,select { font:inherit; color:inherit; } button { cursor:pointer; bo
 .dropdown {background:var(--popover);color:var(--popover-foreground);border:1px solid var(--border);border-radius:10px;box-shadow:0 5px 16px #0004;padding:4px;overflow:auto;max-height:300px;font-size:13px}
 .dropdown .account-row {display:flex;align-items:center;gap:10px;width:100%;border:0;border-radius:6px;padding:9px 10px;text-align:left;cursor:pointer;transition:background-color 150ms,color 150ms}
 .dropdown .account-row:is(:hover,:focus-visible),.dropdown .manage:is(:hover,:focus-visible) {background:var(--accent);color:var(--accent-foreground);outline:none}
-.project-initials {display:flex;align-items:center;justify-content:center;flex-shrink:0;width:30px;height:30px;border-radius:6px;background:light-dark(hsl(var(--tone) 75% 93%),hsl(var(--tone) 30% 23%));color:light-dark(hsl(var(--tone) 65% 32%),hsl(var(--tone) 65% 78%));font-size:11px;font-weight:600}
+.project-initials {display:flex;align-items:center;justify-content:center;flex-shrink:0;width:30px;height:30px;border-radius:6px;background:var(--muted);color:var(--muted-foreground);font-size:11px;font-weight:600}
+.login-icon {flex-shrink:0}.login-icon > span {position:relative;display:flex;align-items:center;justify-content:center;width:30px;height:30px;border:0;border-radius:6px;background:light-dark(hsl(var(--tone) 75% 93%),hsl(var(--tone) 30% 23%));color:light-dark(hsl(var(--tone) 65% 32%),hsl(var(--tone) 65% 78%));font-size:18px}.login-icon svg {width:16px;height:16px}.login-icon img {position:absolute;width:20px;height:20px;object-fit:contain;background:inherit}
 .account-text {min-width:0}.account-label,.account-email {display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.account-label {font-weight:500}.account-email {font-size:12px;color:var(--muted-foreground)}
 .dropdown-footer {display:flex;justify-content:flex-end;padding:2px 4px}.dropdown .manage {display:flex;align-items:center;justify-content:center;width:26px;height:26px;padding:4px;border:0;border-radius:5px;cursor:pointer;transition:background-color 150ms,color 150ms}
 .muted {color:light-dark(#666,#aaa);font-size:12px}.prompt {width:320px;right:16px;top:16px}.prompt h2{font-size:16px;margin:0 0 8px}.prompt p{margin:6px 0;overflow-wrap:anywhere}.prompt label {display:block;margin-top:10px}.prompt input,.prompt select {display:block;width:100%;margin:5px 0;padding:8px;background:transparent;border:1px solid light-dark(#ddd,#555);border-radius:8px}.actions{display:flex;gap:8px;margin-top:14px}.actions button{flex:1}.error{color:light-dark(#b91c1c,#fca5a5)}
+.prompt {width:360px;max-width:calc(100vw - 24px);max-height:calc(100vh - 32px);overflow:auto;background:var(--popover);color:var(--popover-foreground);border-color:var(--border);border-radius:10px;padding:16px;box-shadow:0 8px 30px #0003}
+.prompt-header {display:flex;align-items:center;gap:9px;margin-bottom:16px}.prompt-header h2 {flex:1;font-size:15px;font-weight:600;margin:0}.brand-icon {color:var(--primary)}.prompt .close {border:0;padding:0;width:24px;height:24px;font-size:22px;color:var(--muted-foreground)}
+.segments {display:flex;padding:3px;background:var(--muted);border-radius:7px;gap:3px;margin-bottom:14px}.segments button {flex:1;border:0;padding:6px;font-size:12px;border-radius:5px}.segments button[aria-selected=true] {background:var(--background);box-shadow:0 1px 3px #0002}
+.login-summary {display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:7px;padding:12px}.login-summary .account-text {flex:1}.login-icon {display:flex;align-items:center;justify-content:center;flex-shrink:0;width:32px;height:32px;background:var(--muted);border:1px solid var(--border);border-radius:6px}.prompt .edit {padding:4px 8px;font-size:12px}
+.preview-fields {padding:8px 0}.prompt input,.prompt select {border-color:var(--border);border-radius:6px;background:var(--background);color:var(--foreground)}.prompt select option {background:var(--background);color:var(--foreground)}
+.prompt .update-row {display:flex;align-items:center;gap:10px;margin:0;padding:10px;border-radius:6px;cursor:pointer;transition:background 150ms}.update-row .account-text {flex:1}.prompt .update-row input {width:15px;margin:0;padding:0;accent-color:var(--primary)}.update-row:hover,.update-row.selected {background:var(--accent)}.update-list {max-height:210px;overflow:auto}.prompt .detection-note {font-size:11px;margin-top:12px}.prompt .actions {justify-content:flex-end;border-top:1px solid var(--border);padding-top:12px}.prompt .actions button {flex:initial;min-width:80px;border-radius:6px;padding:7px 12px}.prompt .primary {background:var(--primary);color:var(--primary-foreground)}
 `
 function node<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -61,7 +73,10 @@ export function inpage(
   let prompt: HTMLElement | null = null
   let promptId = ""
   let expiry: ReturnType<typeof setTimeout> | undefined
+  const iconRoots: Root[] = []
   function closeSuggestions() {
+    for (const root of iconRoots) root.unmount()
+    iconRoots.length = 0
     suggestion?.remove()
     suggestion = null
     activate.clear()
@@ -101,12 +116,6 @@ export function inpage(
       if (event.target instanceof Element && event.target.closest("button"))
         event.preventDefault()
     })
-    const initials = context.project.name
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((part) => part[0] ?? "")
-      .join("")
-      .toUpperCase()
     for (const account of context.accounts) {
       const button = node(
         "button",
@@ -117,8 +126,16 @@ export function inpage(
       button.style.setProperty("--tone", String(accountTone(account).hue))
       button.type = "button"
       button.setAttribute("aria-label", `${account.label} · ${account.email}`)
-      const icon = node("span", initials, "project-initials")
+      const icon = node("span", "", "login-icon")
       icon.setAttribute("aria-hidden", "true")
+      const root = createRoot(icon)
+      iconRoots.push(root)
+      root.render(
+        createElement(ItemIcon, {
+          icon: account.icon,
+          website: accountWebsites(account, context.project)[0]?.url,
+        })
+      )
       const text = node("span", "", "account-text")
       text.append(
         node("span", account.label, "account-label"),
@@ -201,44 +218,61 @@ export function inpage(
         ? "Update password in DevLogin?"
         : "Save login to DevLogin?"
     )
-    box.append(
-      node(
-        "h2",
-        pending.matches.length
-          ? "Update password in DevLogin?"
-          : "Save login to DevLogin?"
-      )
+    let mode: "new" | "update" = pending.matches.length ? "update" : "new"
+    const header = node("div", "", "prompt-header")
+    const mark = node("span", "", "brand-icon")
+    mark.innerHTML =
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 7h.01M9 13a6 6 0 1 1 4 4l-3 3H7v-3H4v-3l5-1Z"/></svg>'
+    const heading = node(
+      "h2",
+      mode === "update" ? "Update saved login?" : "Save login?"
     )
-    box.append(
-      node(
-        "p",
-        `${pending.project?.name ?? "New project"} · ${new URL(pending.website).host}`,
-        "muted"
-      )
+    const x = node("button", "×", "close")
+    x.setAttribute("aria-label", "Close")
+    header.append(mark, heading, x)
+    box.append(header)
+    const tabs = node("div", "", "segments")
+    tabs.setAttribute("role", "tablist")
+    const newTab = node("button", "New Login")
+    const updateTab = node("button", "Update Existing")
+    newTab.setAttribute("role", "tab")
+    updateTab.setAttribute("role", "tab")
+    updateTab.disabled = !pending.matches.length
+    tabs.append(newTab, updateTab)
+    box.append(tabs)
+    const summary = node("div", "", "login-summary")
+    const icon = node(
+      "span",
+      pending.project?.icon && !/^[a-z]+$/.test(pending.project.icon)
+        ? pending.project.icon
+        : "🔑",
+      "login-icon"
     )
-    box.append(
-      node(
-        "p",
-        "Form submission detected. Authentication success has not been verified.",
-        "muted"
-      )
-    )
-    const choice = node("select")
-    if (pending.matches.length) {
-      box.append(node("label", "Account to update"))
-      choice.setAttribute("aria-label", "Account to update")
-      for (const account of pending.matches) {
-        const option = node("option", `${account.label} · ${account.email}`)
-        option.value = account.id
-        choice.append(option)
-      }
-      box.append(choice)
-    } else box.append(node("p", pending.email))
-    box.append(node("p", "Password: ••••••••••••"))
+    const identity = node("div", "", "account-text")
+    const title = pending.project?.name ?? new URL(pending.website).hostname
+    const titleText = node("span", title, "account-label")
+    identity.append(titleText, node("span", pending.email, "account-email"))
+    const edit = node("button", "Edit", "edit")
+    summary.append(icon, identity, edit)
     const label = node("input")
-    label.placeholder = "Account label (optional)"
+    label.value = title
     label.setAttribute("aria-label", "Account label")
-    if (!pending.matches.length) box.append(label)
+    label.hidden = true
+    edit.onclick = () => {
+      label.hidden = !label.hidden
+      if (!label.hidden) label.focus()
+    }
+    label.oninput = () => {
+      titleText.textContent = label.value || title
+    }
+    const newFields = node("div")
+    newFields.append(summary, label)
+    const fields = node("div", "", "preview-fields")
+    fields.append(
+      node("p", "Password  ••••••••••••"),
+      node("p", new URL(pending.website).host, "muted")
+    )
+    newFields.append(fields)
     const projectChoice = node("select")
     projectChoice.setAttribute("aria-label", "Project")
     const newProject = node("option", "Create new project")
@@ -260,48 +294,107 @@ export function inpage(
     projectChoice.onchange = () => {
       projectName.hidden = !!projectChoice.value
     }
-    if (!pending.matches.length)
-      box.append(node("label", "Project"), projectChoice, projectName)
+    newFields.append(
+      node("label", "Save to", "muted"),
+      projectChoice,
+      projectName
+    )
+    const updateFields = node("div", "", "update-list")
+    let accountId = pending.matches[0]?.id
+    for (const account of pending.matches) {
+      const row = node("label", "", "update-row")
+      const radio = node("input")
+      radio.type = "radio"
+      radio.name = "devlogin-update"
+      radio.value = account.id
+      radio.checked = account.id === accountId
+      radio.setAttribute("aria-label", `${account.label} · ${account.email}`)
+      const text = node("span", "", "account-text")
+      text.append(
+        node("span", account.label, "account-label"),
+        node("span", account.email, "account-email")
+      )
+      row.append(
+        node(
+          "span",
+          account.icon && !/^[a-z]+$/.test(account.icon) ? account.icon : "🔑",
+          "login-icon"
+        ),
+        text,
+        radio
+      )
+      row.classList.toggle("selected", radio.checked)
+      radio.onchange = () => {
+        accountId = account.id
+        for (const other of updateFields.querySelectorAll(".update-row"))
+          other.classList.remove("selected")
+        row.classList.add("selected")
+      }
+      updateFields.append(row)
+    }
+    box.append(newFields, updateFields)
+    box.append(
+      node("p", "Form submitted · Sign-in not verified", "muted detection-note")
+    )
     const error = node("p", "", "error")
     error.setAttribute("role", "alert")
     box.append(error)
     const actions = node("div", "", "actions")
-    const save = node(
-      "button",
-      pending.matches.length ? "Update saved" : "Save login",
-      "primary"
-    )
+    const save = node("button", "", "primary")
     const dismiss = node("button", "Not now")
     function close() {
       box.remove()
-      prompt = null
+      if (prompt === box) prompt = null
       clearTimeout(expiry)
     }
-    dismiss.onclick = () => {
+    const dismissPrompt = () => {
       void send({ type: "dismiss", id: pending.id }).catch(() => {})
       close()
     }
+    x.onclick = dismissPrompt
+    dismiss.onclick = dismissPrompt
+    function renderMode() {
+      newFields.hidden = mode !== "new"
+      updateFields.hidden = mode !== "update"
+      newTab.setAttribute("aria-selected", String(mode === "new"))
+      updateTab.setAttribute("aria-selected", String(mode === "update"))
+      heading.textContent =
+        mode === "new" ? "Save login?" : "Update saved login?"
+      save.textContent = mode === "new" ? "Save login" : "Update saved"
+    }
+    newTab.onclick = () => {
+      mode = "new"
+      renderMode()
+    }
+    updateTab.onclick = () => {
+      mode = "update"
+      renderMode()
+    }
+    renderMode()
     save.onclick = async (event) => {
-      // Page JavaScript can reach an open Shadow DOM, but cannot forge a trusted
-      // click. A scripted click must never save or overwrite shared credentials.
+      // Only a real user action can save or overwrite shared credentials.
       if (!event.isTrusted) return
       save.disabled = true
       dismiss.disabled = true
+      x.disabled = true
+      newTab.disabled = true
+      updateTab.disabled = true
       try {
         await send({
           type: "confirm",
           id: pending.id,
-          accountId: choice.value || undefined,
+          mode,
+          accountId: mode === "update" ? accountId : undefined,
           label: label.value,
           projectName: projectName.value,
-          projectId: projectChoice.value || null,
+          projectId:
+            mode === "update"
+              ? pending.project?.id
+              : projectChoice.value || null,
         })
         await refresh()
         box.replaceChildren(
-          node(
-            "h2",
-            pending.matches.length ? "Password updated" : "Login saved"
-          ),
+          node("h2", mode === "update" ? "Password updated" : "Login saved"),
           node("p", "Synced with DevLogin", "muted")
         )
         expiry = setTimeout(close, 2000)
@@ -310,9 +403,12 @@ export function inpage(
           failure instanceof Error ? failure.message : "Could not save"
         save.disabled = false
         dismiss.disabled = false
+        x.disabled = false
+        newTab.disabled = false
+        updateTab.disabled = !pending.matches.length
       }
     }
-    actions.append(save, dismiss)
+    actions.append(dismiss, save)
     box.append(actions)
     shadow.append(box)
     applyTheme()
@@ -330,7 +426,7 @@ export function inpage(
         anchor.focus()
       }
       prompt
-        ?.querySelector<HTMLButtonElement>(".actions button:last-child")
+        ?.querySelector<HTMLButtonElement>(".actions button:first-child")
         ?.click()
     }
   }
