@@ -108,7 +108,7 @@ export function inpage(
     anchor = input
     const menu = node("div", "", "surface dropdown")
     menu.setAttribute("role", "region")
-    menu.setAttribute("aria-label", "DevLogin accounts")
+    menu.setAttribute("aria-label", "Global Login accounts")
     // Keep the original input focused during pointer selection. Keyboard users
     // can still move into the rows with ArrowDown or Tab.
     menu.addEventListener("pointerdown", (event) => {
@@ -214,8 +214,8 @@ export function inpage(
     box.setAttribute(
       "aria-label",
       pending.matches.length
-        ? "Update password in DevLogin?"
-        : "Save login to DevLogin?"
+        ? "Update password in Global Login?"
+        : "Save login to Global Login?"
     )
     let mode: "new" | "update" = pending.matches.length ? "update" : "new"
     const header = node("div", "", "prompt-header")
@@ -394,7 +394,7 @@ export function inpage(
         await refresh()
         box.replaceChildren(
           node("h2", mode === "update" ? "Password updated" : "Login saved"),
-          node("p", "Synced with DevLogin", "muted")
+          node("p", "Synced with Global Login", "muted")
         )
         expiry = setTimeout(close, 2000)
       } catch (failure) {

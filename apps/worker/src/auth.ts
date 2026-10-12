@@ -87,11 +87,15 @@ async function createSession(env: AppEnv["Bindings"], userId: string) {
 }
 
 export const auth = new Hono<AppEnv>()
-auth.get("/status", (c) =>
-  c.json({
+auth.get("/status", (c) => {
+  const extensionId = c.req.query("extension_id")
+  return c.json({
     configured: Boolean(c.env.GOOGLE_CLIENT_ID && c.env.GOOGLE_CLIENT_SECRET),
+    ...(extensionId !== undefined
+      ? { extension_allowed: extensionIds(c.env).includes(extensionId) }
+      : {}),
   })
-)
+})
 auth.get("/google", async (c) => {
   if (!c.env.GOOGLE_CLIENT_ID || !c.env.GOOGLE_CLIENT_SECRET)
     return c.json({ error: "Google OAuth is not configured" }, 503)

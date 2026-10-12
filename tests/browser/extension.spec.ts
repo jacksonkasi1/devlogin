@@ -342,7 +342,7 @@ async function loginPage() {
     await page.locator("#email").blur()
     await page.locator("#email").focus()
     await expect(
-      page.getByRole("region", { name: "DevLogin accounts" })
+      page.getByRole("region", { name: "Global Login accounts" })
     ).toBeVisible()
   }).toPass()
   return page
@@ -395,7 +395,7 @@ test("inline suggestions show website favicons by default and saved emoji overri
 })
 test("in-page dropdown opens on focus, highlights the whole row, and fills both fields", async () => {
   const page = await loginPage()
-  const menu = page.getByRole("region", { name: "DevLogin accounts" })
+  const menu = page.getByRole("region", { name: "Global Login accounts" })
   const row = page.getByRole("button", {
     name: "Fixture account · login@example.com",
     exact: true,
@@ -430,7 +430,7 @@ test("in-page dropdown opens on focus, highlights the whole row, and fills both 
 })
 test("inline dropdown keyboard selection, Escape, outside click and blur-safe selection", async () => {
   const page = await loginPage()
-  const menu = page.getByRole("region", { name: "DevLogin accounts" })
+  const menu = page.getByRole("region", { name: "Global Login accounts" })
   const row = page.getByRole("button", {
     name: "Fixture account · login@example.com",
     exact: true,
@@ -471,7 +471,7 @@ test("inline dropdown tracks its input when scrolling and resizing and opens man
   })
   await page.locator("#email").blur()
   await page.locator("#email").focus()
-  const menu = page.getByRole("region", { name: "DevLogin accounts" })
+  const menu = page.getByRole("region", { name: "Global Login accounts" })
   const aligned = async () => {
     const input = await page.locator("#email").boundingBox()
     const dropdown = await menu.boundingBox()
@@ -511,7 +511,7 @@ test("inline dropdown stays hidden when no accounts match", async () => {
   await page.locator("#email").focus()
   await page.waitForTimeout(1200)
   await expect(
-    page.getByRole("region", { name: "DevLogin accounts" })
+    page.getByRole("region", { name: "Global Login accounts" })
   ).not.toBeVisible()
   await page.close()
 })
@@ -521,7 +521,7 @@ test("manual new login is confirmed before saving; ciphertext sync and web see i
   await page.locator("#email").fill("new@example.com")
   await page.locator("#password").fill("new-password")
   await page.getByRole("button", { name: "Login", exact: true }).click()
-  const prompt = page.getByRole("dialog", { name: "Save login to DevLogin?" })
+  const prompt = page.getByRole("dialog", { name: "Save login to Global Login?" })
   await expect(prompt).toBeVisible()
   await expect(prompt).toContainText("Sign-in not verified")
   await page.screenshot({ path: "test-results/save-login-prompt.png" })
@@ -566,7 +566,7 @@ test("different login password updates the existing record; Not now preserves it
   await page.locator("#password").fill("changed-password")
   await page.getByRole("button", { name: "Login", exact: true }).click()
   const prompt = page.getByRole("dialog", {
-    name: "Update password in DevLogin?",
+    name: "Update password in Global Login?",
   })
   await expect(prompt).toBeVisible()
   await prompt.getByRole("button", { name: "Not now" }).click()
@@ -606,7 +606,7 @@ test("change password uses matching new/confirm fields and ignores mismatches", 
     .getByRole("button", { name: "Update password", exact: true })
     .click()
   await page
-    .getByRole("dialog", { name: "Update password in DevLogin?" })
+    .getByRole("dialog", { name: "Update password in Global Login?" })
     .getByRole("button", { name: "Update saved" })
     .click()
   await expect(
@@ -626,7 +626,7 @@ test("signup saves a new account and reset password allows choosing an existing 
   await page.locator("#confirm").fill("signup-password")
   await page.getByRole("button", { name: "Register", exact: true }).click()
   await page
-    .getByRole("dialog", { name: "Save login to DevLogin?" })
+    .getByRole("dialog", { name: "Save login to Global Login?" })
     .getByRole("button", { name: "Save login", exact: true })
     .click()
   await expect(page.getByText("Login saved", { exact: true })).toBeVisible()
@@ -641,7 +641,7 @@ test("signup saves a new account and reset password allows choosing an existing 
     .getByRole("button", { name: "Update password", exact: true })
     .click()
   const prompt = page.getByRole("dialog", {
-    name: "Update password in DevLogin?",
+    name: "Update password in Global Login?",
   })
   await expect(prompt).toBeVisible()
   await prompt.getByRole("radio", { name: new RegExp(created.email) }).check()
@@ -672,7 +672,7 @@ test("unknown enabled website offers project creation; navigation keeps only a s
   )
   await page.getByRole("button", { name: "Login", exact: true }).click()
   await page.waitForURL("**/home")
-  const prompt = page.getByRole("dialog", { name: "Save login to DevLogin?" })
+  const prompt = page.getByRole("dialog", { name: "Save login to Global Login?" })
   await expect(prompt).toBeVisible()
   await prompt.getByLabel("Project name").fill("Discovered local app")
   await prompt.getByRole("button", { name: "Save login", exact: true }).click()
@@ -839,7 +839,7 @@ test("browser restart preserves authentication and site registration without per
   await page.locator("#password").fill("transient-password")
   await page.getByRole("button", { name: "Login", exact: true }).click()
   await expect(
-    page.getByRole("dialog", { name: "Save login to DevLogin?" })
+    page.getByRole("dialog", { name: "Save login to Global Login?" })
   ).toBeVisible()
   await context.close()
   await launch()
@@ -931,7 +931,7 @@ test("inline autofill defaults to submit for mouse and input Enter", async () =>
     await expect(page.locator("#password")).toHaveValue("fixture-password")
     await expect(page.locator("body")).toHaveAttribute("data-count", "1")
     await expect(
-      page.getByRole("region", { name: "DevLogin accounts" })
+      page.getByRole("region", { name: "Global Login accounts" })
     ).not.toBeVisible()
     await page.close()
   }
@@ -939,7 +939,7 @@ test("inline autofill defaults to submit for mouse and input Enter", async () =>
 
 test("appearance and submit settings persist and update the inline UI live", async () => {
   const page = await loginPage()
-  const menu = page.getByRole("region", { name: "DevLogin accounts" })
+  const menu = page.getByRole("region", { name: "Global Login accounts" })
   await expect(menu).toHaveClass(/dark/)
   const dark = await menu.evaluate((el) => getComputedStyle(el).backgroundColor)
   // A website's variables must not leak into the extension's light palette.
@@ -1019,7 +1019,7 @@ test("inline submit respects remaining required fields and closes after filling"
     .click()
   await expect(page.locator("#password")).toHaveValue("fixture-password")
   await expect(
-    page.getByRole("region", { name: "DevLogin accounts" })
+    page.getByRole("region", { name: "Global Login accounts" })
   ).not.toBeVisible()
   expect(await page.locator("body").getAttribute("data-count")).toBeNull()
   await page.close()
@@ -1049,7 +1049,7 @@ test("reused localhost port requires matching app metadata before filling", asyn
   await page.locator("#email").blur()
   await page.locator("#email").focus()
   await expect(
-    page.getByRole("region", { name: "DevLogin accounts" })
+    page.getByRole("region", { name: "Global Login accounts" })
   ).not.toBeVisible()
   const ui = await popup()
   await activate(page)
@@ -1148,7 +1148,7 @@ test("identical metadata for two local projects never chooses one arbitrarily", 
   await page.locator("#email").focus()
   await page.waitForTimeout(500)
   await expect(
-    page.getByRole("region", { name: "DevLogin accounts" })
+    page.getByRole("region", { name: "Global Login accounts" })
   ).not.toBeVisible()
   const ui = await popup()
   await activate(page)
@@ -1215,7 +1215,7 @@ test("one login fills multiple configured websites and shares password updates",
   await page.locator("#password").fill("changed-once")
   await page.getByRole("button", { name: "Login", exact: true }).click()
   const prompt = page.getByRole("dialog", {
-    name: "Update password in DevLogin?",
+    name: "Update password in Global Login?",
   })
   await expect(prompt).toBeVisible()
   await prompt
@@ -1308,7 +1308,7 @@ test("save prompt can create a separate login instead of updating an existing ma
   await page.locator("#password").fill("separate-secret")
   await page.getByRole("button", { name: "Login", exact: true }).click()
   const prompt = page.getByRole("dialog", {
-    name: "Update password in DevLogin?",
+    name: "Update password in Global Login?",
   })
   await expect(prompt.getByRole("radio")).toBeChecked()
   await prompt.getByRole("tab", { name: "New Login", exact: true }).click()

@@ -108,7 +108,9 @@ export function App() {
       if (failure instanceof ApiError && failure.status === 401) setUser(null)
       else
         setError(
-          failure instanceof Error ? failure.message : "Could not load DevLogin"
+          failure instanceof Error
+            ? failure.message
+            : "Could not load Global Login"
         )
     } finally {
       setLoading(false)
@@ -224,10 +226,8 @@ export function App() {
         </div>
         <Card className="w-full max-w-sm">
           <CardHeader>
-            <CardTitle>DevLogin</CardTitle>
-            <CardDescription>
-              Your internal project logins, in one place.
-            </CardDescription>
+            <CardTitle>Global Login</CardTitle>
+            <CardDescription>Peacock Projects</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {notice}
@@ -292,10 +292,15 @@ export function App() {
           <button
             className="flex items-center gap-2 font-semibold md:w-[170px] lg:w-[212px]"
             onClick={() => setTab("projects")}
-            aria-label="DevLogin logins"
+            aria-label="Global Login logins"
           >
             <KeyRound className="size-5" />
-            DevLogin
+            <span className="flex flex-col items-start">
+              <span>Global Login</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                Peacock Projects
+              </span>
+            </span>
           </button>
           <div className="relative order-last w-full md:order-none md:max-w-xl md:flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />

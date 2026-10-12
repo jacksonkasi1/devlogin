@@ -1,4 +1,6 @@
-# DevLogin
+# Global Login
+
+Peacock Projects
 
 A single shared internal workspace: Google sign-in, manual user approval, web project/account management, and a Chrome extension for managing and using project credentials. Bun workspaces, Vite/React, WXT, Hono, D1, and Drizzle. No organizations or billing.
 
@@ -87,11 +89,15 @@ bun run build:extension
 
 1. Open `chrome://extensions`, enable Developer mode, and choose **Load unpacked**.
 2. Select `apps/extension/.output/chrome-mv3`.
-3. This checkout's unpacked extension ID, `dlhhhalmplphflkcolobockpofadfeaa`, is already allowed in the production config. Compare it with the displayed ID. If it differs, add the displayed ID to `vars.EXTENSION_IDS` in `apps/worker/wrangler.jsonc`. Multiple IDs are comma separated. For local use, also set `EXTENSION_IDS` in `.dev.vars`.
+3. The manifest public key fixes the extension ID to `mnkjlmlggnfdgdildlgekdnlfomnlfgi` on Windows and Mac, in Chrome and Brave. This ID and the previous Windows ID are allowed in the production config. For local use, also set `EXTENSION_IDS` in `.dev.vars`. Additional IDs are comma separated.
 4. Run `bun run deploy` if you change the production allowlist.
 5. Open the popup. Its default backend is the deployment above; change it in **Settings** if needed. Click **Continue with Google**. Reopen the popup after authentication finishes.
 
-Changing the backend signs the extension out. Approval applies equally to extension sessions. An unpacked extension's ID can change when its installation path changes; update the allowlist if that happens.
+Changing the backend signs the extension out. Approval applies equally to extension sessions.
+
+When upgrading from a build without the manifest key, deploy the updated backend first, then remove the old extension and load the new build on each machine. The new ID requires signing in again and granting site permissions again; saved logins remain on the backend.
+
+If Mac Chrome or Brave reports **Authorization page could not be loaded**, compare the ID in `chrome://extensions` or `brave://extensions` with the backend's `EXTENSION_IDS`. Older unpacked builds use IDs that vary with installation path and OS, so the Windows ID may not authorize the Mac installation. Installing the current build and deploying the updated allowlist resolves that mismatch. Current builds check the allowlist before opening Google and display the rejected ID.
 
 ## Local development
 
@@ -113,7 +119,7 @@ bun run dev:extension
 
 Select `http://localhost:8787` as the backend in the extension's Settings. `.env.example` documents the optional `VITE_API_ORIGIN` build override; copy it to `apps/extension/.env` when needed.
 
-## Using DevLogin
+## Using Global Login
 
 - Administrators add, edit, and delete projects/accounts in either the web dashboard or extension. Approved members can view and use credentials and manage their own auto-login preferences. Web forms live in shadcn dialogs; projects filter the login list in the three-panel workspace.
 - Add websites to each login. HTTPS is required except on localhost. Scheme, host, and port match exactly; staging domains must be listed explicitly. URL path prefixes are supported, with the most specific prefix taking precedence. Optional login paths and custom selectors are configured per website in Advanced settings.
@@ -124,13 +130,13 @@ Select `http://localhost:8787` as the backend in the extension's Settings. `.env
 - Google accounts initiate the application's sign-in button. They do not select a Google identity or bypass Google's checks.
 - Automatic attempts run once per page URL, no more than once per minute per tab/project, and pause after three attempts in ten minutes. Manual submissions have a five-second guard. Deleting a selected account disables its auto-login preference.
 - Popup opening, navigation, mutation, and Refresh sync metadata from D1. Content scripts use a 30-second metadata freshness window; password retrieval and automatic submission re-check authenticated access. Passwords are fetched when needed and never cached in extension storage. Revealed passwords hide after 30 seconds.
-- Native/common HTML and React forms are supported. Multi-step identity forms, CAPTCHA, closed shadow roots, and cross-origin iframe forms require manual interaction; DevLogin does not bypass them.
+- Native/common HTML and React forms are supported. Multi-step identity forms, CAPTCHA, closed shadow roots, and cross-origin iframe forms require manual interaction; Global Login does not bypass them.
 
 ### Enable a website and save a login
 
-1. Visit a project website and choose **⋯ → Enable DevLogin on this site** in the popup. Chrome asks for site permission. New HTTPS websites require this explicit grant; the backend and localhost hosts are included for API/local development. Chrome permissions cover the host, while project/account matching still checks the exact scheme and port.
-2. Optionally enable **browser-wide monitoring** in Settings for discovery on other sites. Disable it there anytime. **Exclude this website** disables autofill and capture on that exact origin, including when browser-wide monitoring is on. Google authentication domains and the DevLogin backend are always excluded from capture.
-3. Submit a normal login, signup, change-password, or reset-password form. Administrators receive **Save login to DevLogin?** or **Update password in DevLogin?** if the submitted password differs from the saved credential. Regular users can fill shared accounts but cannot create or update them.
+1. Visit a project website and choose **⋯ → Enable Global Login on this site** in the popup. Chrome asks for site permission. New HTTPS websites require this explicit grant; the backend and localhost hosts are included for API/local development. Chrome permissions cover the host, while project/account matching still checks the exact scheme and port.
+2. Optionally enable **browser-wide monitoring** in Settings for discovery on other sites. Disable it there anytime. **Exclude this website** disables autofill and capture on that exact origin, including when browser-wide monitoring is on. Google authentication domains and the Global Login backend are always excluded from capture.
+3. Submit a normal login, signup, change-password, or reset-password form. Administrators receive **Save login to Global Login?** or **Update password in Global Login?** if the submitted password differs from the saved credential. Regular users can fill shared accounts but cannot create or update them.
 4. Review the website, project, account and masked password. Choose a label, or choose which matching account to update. Choose an existing project or create a new one for an unknown enabled website. Click **Save login** / **Update saved**, or **Not now**.
 5. The shared record syncs immediately. Popup open/Refresh and a 30-second metadata check pick up changes from other clients. The web dashboard refreshes on focus and every 30 seconds while visible.
 
@@ -146,7 +152,7 @@ Administrators can drag a login from the middle list onto another project in the
 
 Click the icon preview or Change Icon for quick choices, then **More emojis** to browse the full bundled catalog with search, categories, and additional results. You can also paste a single emoji, including skin-tone or joined emoji, into the search box and click Use. The shared picker works in the web app and extension; its catalog loads on demand without contacting an emoji service. Data comes from [Unicode's emoji catalog](https://unicode.org/Public/emoji/latest/emoji-test.txt) under the [Unicode data license](packages/ui/src/lib/UNICODE-LICENSE.txt). To update it, run `bun scripts/generate-emoji-data.ts`; the generated data and license are committed to Git.
 
-New logins default to the first website's favicon in the web editor, extension popup, and in-page autofill suggestions. Selecting an emoji or Lucide icon overrides it; **Use website favicon** clears that override and persists when saved. The preview updates while editing websites. Public sites try Google's favicon service (hostname only), then DevLogin discovers the icon declared in the site's public HTML, then `/favicon.ico`. The public lookup reads only the origin's home page, follows only public HTTPS redirects, and limits response size and time. Localhost and private addresses use only their own site. Unavailable icons fall back to a key.
+New logins default to the first website's favicon in the web editor, extension popup, and in-page autofill suggestions. Selecting an emoji or Lucide icon overrides it; **Use website favicon** clears that override and persists when saved. The preview updates while editing websites. Public sites try Google's favicon service (hostname only), then Global Login discovers the icon declared in the site's public HTML, then `/favicon.ico`. The public lookup reads only the origin's home page, follows only public HTTPS redirects, and limits response size and time. Localhost and private addresses use only their own site. Unavailable icons fall back to a key.
 
 ## Verification
 

@@ -193,7 +193,7 @@ export function App() {
         throw new Error("Site permission was not granted")
       await send({ type: "permissions-changed" })
       await refresh()
-      toast.success("DevLogin enabled")
+      toast.success("Global Login enabled")
     } catch (failure) {
       toast.error(
         failure instanceof Error ? failure.message : "Could not enable site"
@@ -323,7 +323,7 @@ export function App() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-60">
             <div className="truncate px-2 py-2 text-xs text-muted-foreground">
-              {user?.email ?? "DevLogin"}
+              {user?.email ?? "Global Login"}
             </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => setView("settings")}>
@@ -343,7 +343,7 @@ export function App() {
             {snapshot?.tabUrl?.startsWith("http") && (
               <>
                 <DropdownMenuItem onClick={() => void permission()}>
-                  Enable DevLogin on this site
+                  Enable Global Login on this site
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() =>
@@ -509,14 +509,14 @@ export function App() {
           <KeyRound className="size-8 text-muted-foreground" />
           <h1 className="text-lg font-semibold">
             {!user
-              ? "Welcome to DevLogin"
+              ? "Welcome to Global Login"
               : !user.approved
                 ? "Waiting for approval"
                 : "Connect to your logins"}
           </h1>
           <p className="text-sm text-muted-foreground">
             {!user
-              ? "Sign in with Google to sync your saved logins."
+              ? "Peacock Projects"
               : !user.approved
                 ? `${user.email} requires administrator approval.`
                 : "Refresh to sync your accounts."}
@@ -757,7 +757,10 @@ export function App() {
           />
           {busy ? "Syncing…" : error ? "Sync unavailable" : "Synced"}
         </span>
-        <span>DevLogin</span>
+        <span className="flex flex-col items-end">
+          <span>Global Login</span>
+          <span className="text-[10px]">Peacock Projects</span>
+        </span>
       </footer>
       <Dialog
         open={!!editor}

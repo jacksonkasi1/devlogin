@@ -337,7 +337,7 @@ test("mobile drill-down, back navigation and dark theme", async ({ page }) => {
   await expect(page.locator("html")).toHaveClass(/dark/)
   await page.reload()
   await expect(page.locator("html")).toHaveClass(/dark/)
-  await page.getByRole("button", { name: "DevLogin logins" }).click()
+  await page.getByRole("button", { name: "Global Login logins" }).click()
   await expect(
     page.getByRole("complementary", { name: "Projects" })
   ).toBeVisible()

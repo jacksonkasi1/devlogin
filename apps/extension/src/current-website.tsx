@@ -135,7 +135,7 @@ export function CurrentWebsite({
         className="w-full"
         onClick={() => void permission()}
       >
-        Enable DevLogin on this site
+        Enable Global Login on this site
       </Button>
       {accountList(detected)}
     </>
@@ -155,7 +155,7 @@ export function CurrentWebsite({
             variant="outline"
             onClick={() => void permission()}
           >
-            Enable DevLogin on this site
+            Enable Global Login on this site
           </Button>
         )}
         {user.is_admin && currentOrigin && (

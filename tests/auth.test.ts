@@ -62,6 +62,31 @@ function cookieFrom(response: Response) {
 }
 
 describe("Google authentication and approval", () => {
+  test("auth status identifies allowed and unknown extension installations", async () => {
+    expect(await (await request("/api/auth/status")).json()).toEqual({
+      configured: true,
+    })
+    expect(
+      await (
+        await request(`/api/auth/status?extension_id=${extensionId}`)
+      ).json()
+    ).toEqual({ configured: true, extension_allowed: true })
+    const unknown = "b".repeat(32)
+    expect(
+      await (await request(`/api/auth/status?extension_id=${unknown}`)).json()
+    ).toEqual({ configured: true, extension_allowed: false })
+    expect(
+      (
+        await request(
+          `/api/auth/google?redirect_uri=${encodeURIComponent(`https://${unknown}.chromiumapp.org/`)}&code_challenge=${await hash(randomToken())}`
+        )
+      ).status
+    ).toBe(400)
+    env.EXTENSION_IDS += `, ${unknown}`
+    expect(
+      await (await request(`/api/auth/status?extension_id=${unknown}`)).json()
+    ).toEqual({ configured: true, extension_allowed: true })
+  })
   test("anonymous requests cannot read workspace", async () => {
     for (const path of [
       "/api/me",

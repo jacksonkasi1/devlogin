@@ -34,7 +34,7 @@ export function PopupSettings({
         <p className="mt-1 text-xs text-muted-foreground">
           {user
             ? `${user.name} · ${user.email}`
-            : "Connect to your DevLogin backend"}
+            : "Connect to your Global Login backend"}
         </p>
       </div>
       <div className="space-y-4">

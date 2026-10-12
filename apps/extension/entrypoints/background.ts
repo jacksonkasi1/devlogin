@@ -47,7 +47,7 @@ export default defineBackground(() => {
   }
   async function api<T>(path: string, options?: RequestInit): Promise<T> {
     const { origin, token } = await configuration()
-    if (!token) throw new ApiError("Sign in to DevLogin", 401)
+    if (!token) throw new ApiError("Sign in to Global Login", 401)
     try {
       return await apiRequest<T>(origin, path, options, token)
     } catch (error) {
@@ -256,12 +256,19 @@ export default defineBackground(() => {
       }
       case "login": {
         const { origin } = await configuration()
-        const status = await apiRequest<{ configured: boolean }>(
+        const status = await apiRequest<{
+          configured: boolean
+          extension_allowed?: boolean
+        }>(
           origin,
-          "/api/auth/status"
+          `/api/auth/status?${new URLSearchParams({ extension_id: browser.runtime.id })}`
         )
         if (!status.configured)
           throw new Error("Google OAuth is not configured on this backend")
+        if (status.extension_allowed === false)
+          throw new Error(
+            `This extension ID (${browser.runtime.id}) is not allowed by the backend. Add it to EXTENSION_IDS and deploy the backend, or install the latest Global Login build.`
+          )
         const bytes = crypto.getRandomValues(new Uint8Array(32))
         const verifier = btoa(String.fromCharCode(...bytes))
           .replace(/\+/g, "-")
@@ -403,13 +410,13 @@ export default defineBackground(() => {
         if (
           forbidden(url, (await configuration()).origin, excluded as string[])
         )
-          throw new Error("DevLogin is disabled on this website")
+          throw new Error("Global Login is disabled on this website")
         if (
           !(await browser.permissions.contains({
             origins: [new URL(url).origin + "/*"],
           }))
         )
-          throw new Error("Enable DevLogin on the saved website first")
+          throw new Error("Enable Global Login on the saved website first")
         await registerSites()
         const tab = await browser.tabs.create({ url })
         if (!tab.id) throw new Error("Could not open website")
@@ -429,7 +436,7 @@ export default defineBackground(() => {
             await new Promise((resolve) => setTimeout(resolve, 250))
           }
           throw new Error(
-            "Website is still loading. Open DevLogin there to fill."
+            "Website is still loading. Open Global Login there to fill."
           )
         } finally {
           openingLogins.delete(tab.id)
@@ -461,7 +468,7 @@ export default defineBackground(() => {
             excluded as string[]
           )
         )
-          throw new Error("DevLogin is disabled on this website")
+          throw new Error("Global Login is disabled on this website")
         if (!accountMatches(account, tab.url))
           throw new Error("Account belongs to another environment")
         if (
@@ -469,7 +476,7 @@ export default defineBackground(() => {
             origins: [new URL(tab.url).origin + "/*"],
           }))
         )
-          throw new Error("Enable DevLogin on this site first")
+          throw new Error("Enable Global Login on this site first")
         const matched = await matchPage(
           siteProjects(data, tab.url),
           tab.url,
@@ -489,7 +496,7 @@ export default defineBackground(() => {
             ) ?? project.urls[0]!
           await browser.tabs.create({ url: loginUrl(project, environment) })
           return {
-            message: "Login page opened. Open DevLogin there and choose Login.",
+            message: "Login page opened. Open Global Login there and choose Login.",
           }
         }
         if (message.submit) await reserve(tab.id, project.id, false)
