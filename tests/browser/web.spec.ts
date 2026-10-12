@@ -2,6 +2,38 @@ import { test, expect } from "@playwright/test"
 
 const backend = "http://localhost:8799"
 
+test("missing Google favicon falls back to the icon declared by the website", async ({
+  page,
+}) => {
+  await page.route(
+    "https://www.google.com/s2/favicons?domain=sandbox.vizfleet.com&sz=64",
+    (route) => route.fulfill({ status: 404 })
+  )
+  await page.route(
+    "https://devlogin.peacockindia.in/api/favicon?url=https%3A%2F%2Fsandbox.vizfleet.com",
+    (route) =>
+      route.fulfill({
+        contentType: "image/svg+xml",
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="red"/></svg>',
+      })
+  )
+  await page.goto(backend)
+  await page.getByRole("button", { name: "Fixture app 1" }).click()
+  await page.getByRole("button", { name: "Add Login", exact: true }).click()
+  await page
+    .getByLabel("Website URL 1", { exact: true })
+    .fill("https://sandbox.vizfleet.com/dashboard/login")
+  const preview = page.getByRole("button", { name: "Change icon preview" })
+  await expect(preview.locator("img")).toHaveAttribute("src", /\/api\/favicon/)
+  await expect
+    .poll(() =>
+      preview
+        .locator("img")
+        .evaluate((img: HTMLImageElement) => img.naturalWidth)
+    )
+    .toBe(64)
+})
+
 test("website favicon defaults on web creation and persists after clearing an emoji", async ({
   page,
   request,

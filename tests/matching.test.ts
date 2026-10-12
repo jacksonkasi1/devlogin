@@ -20,8 +20,9 @@ test("favicon candidates tolerate unfinished URLs and keep local hosts and priva
   expect(
     websiteFavicons("https://app.example.com/login?token=private")
   ).toEqual([
-    "https://app.example.com/favicon.ico",
     "https://www.google.com/s2/favicons?domain=app.example.com&sz=64",
+    "https://devlogin.peacockindia.in/api/favicon?url=https%3A%2F%2Fapp.example.com",
+    "https://app.example.com/favicon.ico",
   ])
 })
 import { encrypt, decrypt } from "../apps/worker/src/crypto"

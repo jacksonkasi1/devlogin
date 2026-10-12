@@ -16,7 +16,7 @@
     "deploy": "bun run build:web && bun run db:remote && bun run --cwd apps/worker deploy",
     "secrets:init": "bun scripts/init-secret.ts",
     "secrets:upload": "bun --env-file=apps/worker/.dev.vars scripts/upload-secrets.ts",
-    "test": "bun test tests/auth.test.ts tests/accounts.test.ts tests/matching.test.ts tests/migration.test.ts",
+    "test": "bun test tests/auth.test.ts tests/accounts.test.ts tests/matching.test.ts tests/migration.test.ts tests/favicon.test.ts",
     "test:browser": "bun run build:web && bun run build:extension && playwright test",
     "test:deployment": "node scripts/deployment-smoke.mjs",
     "extension:zip": "bun run --cwd apps/extension zip",

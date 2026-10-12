@@ -17,8 +17,9 @@ export function websiteFavicons(website?: string): string[] {
     return local
       ? [direct]
       : [
-          direct,
           `https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=64`,
+          `https://devlogin.peacockindia.in/api/favicon?url=${encodeURIComponent(url.origin)}`,
+          direct,
         ]
   } catch {
     return []

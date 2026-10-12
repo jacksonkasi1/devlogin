@@ -21,6 +21,7 @@ import {
 } from "./auth"
 import { accounts, preferences, projects, users } from "./schema"
 import { decrypt, encrypt } from "./crypto"
+import { declaredFavicon, publicWebsite } from "./favicon"
 
 const app = new Hono<AppEnv>()
 app.use("/api/*", async (c, next) => {
@@ -42,6 +43,19 @@ app.use(
 )
 app.use("/api/*", bodyLimit({ maxSize: 524288 }))
 app.route("/api/auth", auth)
+// Images cannot attach extension bearer tokens. Return only public icon URLs.
+app.get("/api/favicon", async (c) => {
+  const website = publicWebsite(c.req.query("url") ?? "")
+  if (!website) return c.body(null, 400)
+  try {
+    const icon = await declaredFavicon(website)
+    if (!icon) return c.body(null, 404)
+    c.header("Cache-Control", "public, max-age=3600")
+    return c.redirect(icon, 302)
+  } catch {
+    return c.body(null, 404)
+  }
+})
 app.use("/api/*", safeMutation, authenticated)
 app.get("/api/me", (c) => c.json(c.get("user")))
 app.use("/api/*", approved)
