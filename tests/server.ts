@@ -82,6 +82,7 @@ Bun.serve({
     if (url.pathname === "/fixture/token") return Response.json({ token })
     if (url.pathname === "/fixture/reset") {
       db.sqlite.exec("DELETE FROM preferences")
+      db.sqlite.exec("DELETE FROM notes")
       db.sqlite.exec("DELETE FROM projects WHERE id != 'fixture-project'")
       db.sqlite.exec("DELETE FROM accounts WHERE id != 'fixture-account'")
       db.sqlite.exec(
@@ -154,8 +155,9 @@ Bun.serve({
     const react = url.searchParams.has("react")
     const custom = url.searchParams.has("custom")
     const google = url.searchParams.has("google")
+    const social = url.searchParams.has("social")
     return new Response(
-      `<!doctype html><html><head><meta charset="utf-8"><meta name="application-name" content="Fixture app"><title>Fixture login</title></head><body>${google ? '<button id="oauth" onclick="document.body.dataset.google=\'opened\'">Continue with Google</button>' : react ? '<div id="root"></div><script src="/react.js" type="module"></script>' : `<form id="login-form"><input id="${custom ? "identity" : "email"}" name="${custom ? "identity" : "email"}" type="${custom ? "text" : "email"}"><input id="${custom ? "secret" : "password"}" type="${custom ? "text" : "password"}"><button id="submit-login" type="submit">Login</button></form><script>document.querySelector('form').addEventListener('submit', event => { event.preventDefault(); document.body.dataset.submitted = JSON.stringify({ email: document.querySelector('#${custom ? "identity" : "email"}').value, password: document.querySelector('#${custom ? "secret" : "password"}').value }); document.body.dataset.count = String(Number(document.body.dataset.count || '0') + 1); });</script>`}</body></html>`,
+      `<!doctype html><html><head><meta charset="utf-8"><meta name="application-name" content="Fixture app"><title>Fixture login</title></head><body>${google ? '<button id="oauth" onclick="document.body.dataset.google=\'opened\'">Continue with Google</button>' : react ? '<div id="root"></div><script src="/react.js" type="module"></script>' : `<form id="login-form"><input id="${custom ? "identity" : "email"}" name="${custom ? "identity" : "email"}" type="${custom ? "text" : "email"}"><input id="${custom ? "secret" : "password"}" type="${custom ? "text" : "password"}">${social ? '<button id="oauth-inline" type="button" onclick="document.body.dataset.google=1">Continue with Google</button><button id="submit-login">Login</button>' : '<button id="submit-login" type="submit">Login</button>'}</form><script>document.querySelector('form').addEventListener('submit', event => { event.preventDefault(); document.body.dataset.submitted = JSON.stringify({ email: document.querySelector('#${custom ? "identity" : "email"}').value, password: document.querySelector('#${custom ? "secret" : "password"}').value }); document.body.dataset.count = String(Number(document.body.dataset.count || '0') + 1); });</script>`}</body></html>`,
       { headers: { "Content-Type": "text/html" } }
     )
   },

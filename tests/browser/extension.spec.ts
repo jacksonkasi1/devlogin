@@ -114,6 +114,24 @@ async function popup() {
   ).toBeVisible()
   return page
 }
+test("popup loads without CSP eval violations", async () => {
+  const page = await context.newPage()
+  await page.addInitScript(() => {
+    const violations: string[] = []
+    Object.assign(window, { cspViolations: violations })
+    window.addEventListener("securitypolicyviolation", (event) => {
+      violations.push(`${event.violatedDirective}:${event.blockedURI}`)
+    })
+  })
+  await page.goto(`chrome-extension://${extensionId}/popup.html`)
+  await expect(
+    page.getByRole("button", { name: "Project filter", exact: true })
+  ).toBeVisible()
+  expect(
+    await page.evaluate(() => Reflect.get(window, "cspViolations"))
+  ).toEqual([])
+  await page.close()
+})
 async function activate(page: Page) {
   const address = page.url()
   await worker.evaluate(async (address) => {
@@ -191,6 +209,26 @@ test("manual Fill only and Login work through the real background service worker
   await ui.close()
   await page.close()
 })
+test("Login submits through the form button, not a social sign-in button", async () => {
+  await automatic(false)
+  const page = await context.newPage()
+  await page.goto(`${fixture}/login?social=1`)
+  const ui = await popup()
+  await activate(page)
+  await ui.evaluate(async () => {
+    // @ts-expect-error browser global
+    const result = await chrome.runtime.sendMessage({
+      type: "manual",
+      accountId: "fixture-account",
+      submit: true,
+    })
+    if (!result.ok) throw new Error(result.error)
+  })
+  await expect(page.locator("body")).toHaveAttribute("data-count", "1")
+  expect(await page.locator("body").getAttribute("data-google")).toBeNull()
+  await ui.close()
+  await page.close()
+})
 test("custom selectors handle fields outside default detection", async () => {
   await api("/projects/fixture-project", "PUT", {
     name: "Fixture app",
@@ -241,8 +279,9 @@ test("popup can add, edit, and delete shared projects and accounts", async () =>
     .fill("Browser-created project")
   await ui.getByRole("button", { name: /Create Project|Save Project/ }).click()
   await expect(ui.getByRole("button", { name: "Project filter" })).toBeVisible()
-  await ui.getByRole("button", { name: "Logins", exact: true }).click()
-  await ui.getByRole("button", { name: "Add Login", exact: true }).click()
+  await ui.getByRole("button", { name: "Back to vault", exact: true }).click()
+  await ui.getByRole("button", { name: "New item", exact: true }).click()
+  await ui.getByRole("menuitem", { name: "Login", exact: true }).click()
   await ui.getByLabel("Title", { exact: true }).fill("Browser account")
   await ui
     .getByLabel("Username / Email", { exact: true })
@@ -521,7 +560,9 @@ test("manual new login is confirmed before saving; ciphertext sync and web see i
   await page.locator("#email").fill("new@example.com")
   await page.locator("#password").fill("new-password")
   await page.getByRole("button", { name: "Login", exact: true }).click()
-  const prompt = page.getByRole("dialog", { name: "Save login to Global Login?" })
+  const prompt = page.getByRole("dialog", {
+    name: "Save login to Global Login?",
+  })
   await expect(prompt).toBeVisible()
   await expect(prompt).toContainText("Sign-in not verified")
   await page.screenshot({ path: "test-results/save-login-prompt.png" })
@@ -672,7 +713,9 @@ test("unknown enabled website offers project creation; navigation keeps only a s
   )
   await page.getByRole("button", { name: "Login", exact: true }).click()
   await page.waitForURL("**/home")
-  const prompt = page.getByRole("dialog", { name: "Save login to Global Login?" })
+  const prompt = page.getByRole("dialog", {
+    name: "Save login to Global Login?",
+  })
   await expect(prompt).toBeVisible()
   await prompt.getByLabel("Project name").fill("Discovered local app")
   await prompt.getByRole("button", { name: "Save login", exact: true }).click()
@@ -759,7 +802,9 @@ test("web creates, edits and deletes accounts and projects with extension sync",
     .getByRole("menuitem", { name: "Manage Projects", exact: true })
     .click()
   await expect(
-    ui.getByText("Web managed project", { exact: true })
+    ui
+      .locator(".popup-screen")
+      .getByText("Web managed project", { exact: true })
   ).toBeVisible()
   await web.getByRole("button", { name: "Edit", exact: true }).click()
   await web.getByLabel("Title", { exact: true }).fill("Edited web login")
@@ -1296,7 +1341,7 @@ test("compact popup filters logins, updates details, copies and masks secrets wi
   await ui.getByRole("menuitem", { name: "Settings", exact: true }).click()
   await ui.getByRole("combobox", { name: "Appearance" }).click()
   await ui.getByRole("option", { name: "Light", exact: true }).click()
-  await ui.getByRole("button", { name: "Logins", exact: true }).click()
+  await ui.getByRole("button", { name: "Back to vault", exact: true }).click()
   await expect(ui.locator("html")).not.toHaveClass(/dark/)
   await ui.screenshot({ path: "test-results/extension-popup-light.png" })
   await ui.close()
@@ -1346,4 +1391,144 @@ test("Open and Fill opens the configured website and fills the selected login", 
   expect(await page.locator("body").getAttribute("data-count")).toBeNull()
   await page.close()
   await ui.close()
+})
+
+test("popup creates, reveals, copies and deletes an encrypted secure note", async () => {
+  const ui = await popup()
+  await ui.getByRole("button", { name: "New item", exact: true }).click()
+  await ui.getByRole("menuitem", { name: "Secure note", exact: true }).click()
+  await ui.getByLabel("Title", { exact: true }).fill("Staging API key")
+  await ui
+    .getByLabel("Secure note", { exact: true })
+    .fill("sk_test_123\nline two")
+  await ui.getByRole("button", { name: "Save Note", exact: true }).click()
+  await expect(
+    ui.getByRole("heading", { name: "Staging API key", exact: true })
+  ).toBeVisible()
+  await expect(ui.locator(".login-details")).not.toContainText("sk_test_123")
+  await ui.getByRole("button", { name: "Show note", exact: true }).click()
+  await expect(ui.locator(".login-details")).toContainText("sk_test_123")
+  await ui.getByLabel("Search logins").fill("staging")
+  await expect(ui.locator(".login-row")).toHaveCount(1)
+  await ui.getByLabel("Search logins").press("Enter")
+  await expect(ui.getByText("Note copied", { exact: true })).toBeVisible()
+  await ui.getByRole("button", { name: "Note actions" }).click()
+  await ui.getByRole("menuitem", { name: "Edit note", exact: true }).click()
+  await expect(ui.getByLabel("Secure note", { exact: true })).toHaveValue(
+    "sk_test_123\nline two"
+  )
+  await ui.getByLabel("Title", { exact: true }).fill("Renamed key")
+  await ui.getByRole("button", { name: "Save Note", exact: true }).click()
+  await expect(
+    ui.getByRole("heading", { name: "Renamed key", exact: true })
+  ).toBeVisible()
+  const response = await fetch(`${backend}/api/sync`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const sync = (await response.json()) as { notes: { id: string }[] }
+  expect(JSON.stringify(sync)).not.toContain("sk_test_123")
+  expect(
+    (await api(`/notes/${sync.notes[0]!.id}/content`, "POST", {})).content
+  ).toBe("sk_test_123\nline two")
+  await ui.getByRole("button", { name: "Note actions" }).click()
+  await ui.getByRole("menuitem", { name: "Delete note", exact: true }).click()
+  await ui
+    .getByRole("dialog")
+    .getByRole("button", { name: "Delete", exact: true })
+    .click()
+  await expect(
+    ui.locator(".login-row").filter({ hasText: "Renamed key" })
+  ).toHaveCount(0)
+  await expect(ui.locator(".login-row")).toHaveCount(1)
+  await ui.close()
+})
+
+async function quickAccess(page: Page) {
+  const address = page.url()
+  await page.bringToFront()
+  await worker.evaluate(async (address) => {
+    // @ts-expect-error Chrome global
+    const tabs = await chrome.tabs.query({})
+    const tab = tabs.find((item: { url: string }) => item.url === address)
+    // @ts-expect-error exposed by the background for tests
+    await globalThis.openQuickAccess(tab)
+  }, address)
+  await expect
+    .poll(() => page.frames().some((f) => f.url().includes("/quick.html")))
+    .toBe(true)
+  const frame = page.frames().find((f) => f.url().includes("/quick.html"))!
+  await expect(
+    frame.getByRole("combobox", { name: "Search logins and notes" })
+  ).toBeFocused()
+  return frame
+}
+test("Quick Access overlay searches, suggests the current site and autofills with Enter", async () => {
+  await automatic(false)
+  await api("/notes", "POST", { title: "Deploy token", content: "tok_1" })
+  const page = await context.newPage()
+  await page.goto(`${fixture}/login`)
+  await activate(page)
+  const frame = await quickAccess(page)
+  await expect(frame.getByText("Suggested for localhost:8798")).toBeVisible()
+  await expect(frame.getByRole("option")).toHaveCount(2)
+  await expect(frame.getByRole("option", { selected: true })).toContainText(
+    "Fixture account"
+  )
+  await page.screenshot({ path: "test-results/quick-access.png" })
+  const search = frame.getByRole("combobox", {
+    name: "Search logins and notes",
+  })
+  await search.fill("deploy")
+  await expect(frame.getByRole("option")).toHaveCount(1)
+  await search.fill("fixture")
+  await search.press("Enter")
+  await expect(page.locator("#email")).toHaveValue("login@example.com")
+  await expect(page.locator("#password")).toHaveValue("fixture-password")
+  await expect
+    .poll(() => page.frames().some((f) => f.url().includes("/quick.html")))
+    .toBe(false)
+  await page.close()
+})
+test("Quick Access toggles cleanly, closes with Escape and rejects foreign token redemption", async () => {
+  const page = await context.newPage()
+  await page.goto(`${fixture}/login`)
+  await activate(page)
+  const frame = await quickAccess(page)
+  expect(frame.url()).not.toContain("#")
+  // Pressing the shortcut again toggles the overlay off without leaving listeners behind.
+  await worker.evaluate(async (address) => {
+    // @ts-expect-error Chrome global
+    const tabs = await chrome.tabs.query({})
+    const tab = tabs.find((item: { url: string }) => item.url === address)
+    // @ts-expect-error exposed by the background for tests
+    await globalThis.openQuickAccess(tab)
+  }, page.url())
+  await expect
+    .poll(() => page.frames().some((f) => f.url().includes("/quick.html")))
+    .toBe(false)
+  await page.evaluate(() => {
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") document.body.dataset.escape = "seen"
+    })
+  })
+  await page.keyboard.press("Escape")
+  await expect(page.locator("body")).toHaveAttribute("data-escape", "seen")
+  const reopened = await quickAccess(page)
+  await reopened
+    .getByRole("combobox", { name: "Search logins and notes" })
+    .press("Escape")
+  await expect
+    .poll(() => page.frames().some((f) => f.url().includes("/quick.html")))
+    .toBe(false)
+  // Tokens are single-use and bound to the overlay frame; other contexts get nothing.
+  const token = crypto.randomUUID()
+  const ui = await popup()
+  const result = await ui.evaluate(
+    // @ts-expect-error Chrome global
+    (token) => chrome.runtime.sendMessage({ type: "quick-session", token }),
+    token
+  )
+  expect(result.ok).toBe(false)
+  await ui.close()
+  await page.close()
 })

@@ -151,7 +151,7 @@ test("projects filter immediately; secrets, search and detail selection stay in 
   const accounts = page.getByRole("region", { name: "Accounts", exact: true })
   const details = page.getByRole("region", { name: "Account details" })
   await expect(
-    details.getByText("Select an account", { exact: true })
+    details.getByText("Select an item", { exact: true })
   ).toBeVisible()
   await page.getByRole("button", { name: "Fixture app 1" }).click()
   await expect(
@@ -184,7 +184,7 @@ test("projects filter immediately; secrets, search and detail selection stay in 
     "href",
     "http://localhost:8798/login"
   )
-  await page.getByRole("button", { name: /All Logins/ }).click()
+  await page.getByRole("button", { name: /All Items/ }).click()
   await page.getByLabel("Search logins").fill("second@example.com")
   await expect(
     accounts.getByRole("button", { name: /Second login/ })
@@ -199,10 +199,10 @@ test("projects filter immediately; secrets, search and detail selection stay in 
   await page.screenshot({ path: "test-results/devlogin-desktop.png" })
   await page.getByLabel("Search logins").fill("no such account")
   await expect(
-    accounts.getByText("No matching logins", { exact: true })
+    accounts.getByText("No matching items", { exact: true })
   ).toBeVisible()
   await expect(
-    details.getByText("Select an account", { exact: true })
+    details.getByText("Select an item", { exact: true })
   ).toBeVisible()
   await expect(page).toHaveURL(backend + "/")
 })
@@ -255,7 +255,7 @@ test("add, edit and confirmed delete update the selected login and shared API", 
     page.getByRole("button", { name: /Edited developer/ })
   ).toHaveCount(0)
   await expect(
-    details.getByText("Select an account", { exact: true })
+    details.getByText("Select an item", { exact: true })
   ).toBeVisible()
   const { token } = await (await request.get(`${backend}/fixture/token`)).json()
   const sync = await (

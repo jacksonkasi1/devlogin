@@ -82,10 +82,17 @@ export default defineContentScript({
       }
     }
     async function observe(root: ParentNode) {
-      if (filling || !pageContext?.admin) return
+      if (filling) return
+      // Read before awaiting: the page may navigate right after submit.
       const data = readSubmission(root)
       if (!data) return
       try {
+        // A quick submit can happen before the page context has loaded.
+        if (!pageContext) {
+          pageContext = await send<PageContext>({ type: "page" })
+          pageAt = Date.now()
+        }
+        if (!pageContext.admin) return
         // Deduplicate submit/click events without retaining passwords in content-script state.
         let signature = 0
         for (const char of JSON.stringify(data))

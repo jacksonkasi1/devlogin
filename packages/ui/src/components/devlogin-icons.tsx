@@ -10,4 +10,8 @@ export {
   Eye,
   EyeOff,
   ArrowLeft,
+  StickyNote,
+  Command,
+  Globe,
+  LogIn,
 } from "lucide-react"

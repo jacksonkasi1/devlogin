@@ -1,8 +1,15 @@
 export function randomToken() {
   return base64url(crypto.getRandomValues(new Uint8Array(32)))
 }
+// Chunked: spreading a large array into fromCharCode overflows the call stack.
+function base64(bytes: Uint8Array) {
+  let binary = ""
+  for (let index = 0; index < bytes.length; index += 0x8000)
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000))
+  return btoa(binary)
+}
 export function base64url(bytes: Uint8Array) {
-  return btoa(String.fromCharCode(...bytes))
+  return base64(bytes)
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "")
@@ -38,7 +45,7 @@ export async function encrypt(
     await key(secret),
     new TextEncoder().encode(value)
   )
-  return `v1.${btoa(String.fromCharCode(...iv))}.${btoa(String.fromCharCode(...new Uint8Array(ciphertext)))}`
+  return `v1.${base64(iv)}.${base64(new Uint8Array(ciphertext))}`
 }
 export async function decrypt(
   value: string,

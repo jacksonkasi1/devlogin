@@ -6,6 +6,7 @@ import { and, desc, eq } from "drizzle-orm"
 import { z, ZodError } from "zod"
 import {
   accountSchema,
+  noteSchema,
   preferenceSchema,
   projectSchema,
 } from "@workspace/shared"
@@ -19,7 +20,7 @@ import {
   safeMutation,
   type AppEnv,
 } from "./auth"
-import { accounts, preferences, projects, users } from "./schema"
+import { accounts, notes, preferences, projects, users } from "./schema"
 import { decrypt, encrypt } from "./crypto"
 import { declaredFavicon, publicWebsite } from "./favicon"
 
@@ -67,6 +68,12 @@ const publicAccount = ({
   ...account,
   websites: account.websites ?? undefined,
 })
+// Note bodies are encrypted with their own associated data and only returned on request.
+const publicNote = ({
+  encrypted_content: _secret,
+  ...note
+}: typeof notes.$inferSelect) => note
+const noteAad = (id: string) => `note:${id}`
 app.get("/api/users", admin, async (c) =>
   c.json(
     await database(c.env).select().from(users).orderBy(desc(users.created_at))
@@ -291,6 +298,87 @@ app.delete("/api/accounts/:id", admin, async (c) => {
     throw new HTTPException(404, { message: "Account not found" })
   return c.json({ ok: true })
 })
+app.get("/api/notes", async (c) => {
+  const rows = await database(c.env).select().from(notes).orderBy(notes.title)
+  return c.json(rows.map(publicNote))
+})
+app.post("/api/notes/:id/content", async (c) => {
+  const [note] = await database(c.env)
+    .select()
+    .from(notes)
+    .where(eq(notes.id, c.req.param("id")))
+  if (!note) throw new HTTPException(404, { message: "Note not found" })
+  return c.json({
+    content: await decrypt(
+      note.encrypted_content,
+      c.env.CREDENTIAL_KEY,
+      noteAad(note.id)
+    ),
+  })
+})
+for (const method of ["post", "put"] as const) {
+  app[method](
+    method === "post" ? "/api/notes" : "/api/notes/:id",
+    admin,
+    async (c) => {
+      const input = noteSchema.parse(await c.req.json())
+      const db = database(c.env)
+      const id = method === "post" ? crypto.randomUUID() : c.req.param("id")!
+      const [existing] =
+        method === "put"
+          ? await db.select().from(notes).where(eq(notes.id, id))
+          : []
+      if (method === "put" && !existing)
+        throw new HTTPException(404, { message: "Note not found" })
+      if (input.project_id) {
+        const [project] = await db
+          .select({ id: projects.id })
+          .from(projects)
+          .where(eq(projects.id, input.project_id))
+        if (!project)
+          throw new HTTPException(404, { message: "Project not found" })
+      }
+      const encrypted_content =
+        input.content !== undefined
+          ? await encrypt(input.content, c.env.CREDENTIAL_KEY, noteAad(id))
+          : existing?.encrypted_content
+      if (encrypted_content === undefined)
+        throw new HTTPException(400, { message: "Note content is required" })
+      const now = new Date().toISOString()
+      const values = {
+        project_id:
+          input.project_id === undefined
+            ? (existing?.project_id ?? null)
+            : input.project_id,
+        title: input.title,
+        icon: input.icon ?? existing?.icon ?? "",
+        encrypted_content,
+        updated_at: now,
+      }
+      const [note] =
+        method === "post"
+          ? await db
+              .insert(notes)
+              .values({ ...values, id, created_at: now })
+              .returning()
+          : await db
+              .update(notes)
+              .set(values)
+              .where(eq(notes.id, id))
+              .returning()
+      return c.json(publicNote(note!), method === "post" ? 201 : 200)
+    }
+  )
+}
+app.delete("/api/notes/:id", admin, async (c) => {
+  const removed = await database(c.env)
+    .delete(notes)
+    .where(eq(notes.id, c.req.param("id")))
+    .returning({ id: notes.id })
+  if (!removed.length)
+    throw new HTTPException(404, { message: "Note not found" })
+  return c.json({ ok: true })
+})
 app.get("/api/preferences", async (c) => {
   const rows = await database(c.env)
     .select({
@@ -336,7 +424,7 @@ app.put("/api/preferences", async (c) => {
 })
 app.get("/api/sync", async (c) => {
   const db = database(c.env)
-  const [projectRows, accountRows, preferenceRows] = await db.batch([
+  const [projectRows, accountRows, preferenceRows, noteRows] = await db.batch([
     db.select().from(projects).orderBy(desc(projects.updated_at)),
     db
       .select()
@@ -350,11 +438,13 @@ app.get("/api/sync", async (c) => {
       })
       .from(preferences)
       .where(eq(preferences.user_id, c.get("user").id)),
+    db.select().from(notes).orderBy(notes.title),
   ])
   const data = {
     projects: projectRows,
     accounts: accountRows.map(publicAccount),
     preferences: preferenceRows,
+    notes: noteRows.map(publicNote),
   }
   // A metadata fingerprint includes deletions and preference changes, without returning secrets.
   const { hash } = await import("./crypto")

@@ -35,6 +35,7 @@ import {
   KeyRound,
   Search,
   Plus,
+  StickyNote,
   Settings,
   Users,
   LogOut,
@@ -241,7 +242,7 @@ export function App() {
               disabled={loading}
               onClick={() => void signIn()}
             >
-              {loading ? "Loadingâ€¦" : "Continue with Google"}
+              {loading ? "Loading…" : "Continue with Google"}
             </Button>
             {error && (
               <Button variant="outline" onClick={reload}>
@@ -274,7 +275,7 @@ export function App() {
             {notice}
             <div className="flex gap-2">
               <Button disabled={loading} onClick={reload}>
-                {loading ? "Checkingâ€¦" : "Check approval"}
+                {loading ? "Checking…" : "Check approval"}
               </Button>
               <Button variant="outline" onClick={() => void signOut()}>
                 Sign out
@@ -306,7 +307,7 @@ export function App() {
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               aria-label="Search logins"
-              placeholder="Search logins…"
+              placeholder="Search logins and notes…"
               className="h-9 rounded-md pl-9"
               value={search}
               onChange={(event) => {
@@ -334,6 +335,20 @@ export function App() {
                 <span>
                   {data && !data.projects.length ? "Add Project" : "Add Login"}
                 </span>
+              </Button>
+            )}
+            {user.is_admin && data && (
+              <Button
+                variant="outline"
+                className="rounded-md"
+                aria-label="Add Note"
+                disabled={loading}
+                onClick={() =>
+                  setEditor({ kind: "note", project: selected ?? undefined })
+                }
+              >
+                <StickyNote />
+                <span className="hidden sm:inline">Add Note</span>
               </Button>
             )}
             <DropdownMenu>
@@ -498,7 +513,7 @@ export function App() {
               <CardHeader>
                 <CardTitle>Settings</CardTitle>
                 <CardDescription>
-                  {user.name} Â· {user.email}
+                  {user.name} · {user.email}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -543,6 +558,18 @@ export function App() {
                 () =>
                   data?.projects.find(
                     (project) => project.id === account.project_id
+                  ) ?? null
+              )
+            }}
+            onNote={(note) => {
+              setMobilePanel("details")
+              setAccountId(note.id)
+              setSearch("")
+              setTab("projects")
+              setSelected(
+                () =>
+                  data?.projects.find(
+                    (project) => project.id === note.project_id
                   ) ?? null
               )
             }}

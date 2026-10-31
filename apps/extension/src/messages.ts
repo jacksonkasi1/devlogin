@@ -15,8 +15,14 @@ export type Message =
   | { type: "snapshot" }
   | { type: "configure"; origin: string }
   | { type: "api"; path: string; method?: string; body?: unknown }
-  | { type: "manual"; accountId: string; submit: boolean }
-  | { type: "open-fill"; accountId: string; submit: boolean }
+  | { type: "manual"; accountId: string; submit: boolean; tabId?: number }
+  | {
+      type: "open-fill"
+      accountId: string
+      submit: boolean
+      windowId?: number
+    }
+  | { type: "quick-session"; token: string }
   | { type: "context" }
   | { type: "automatic"; projectId: string; accountId: string }
   | { type: "page" }
@@ -54,6 +60,8 @@ export type Snapshot = {
   origin: string
   tabUrl: string
   tabId?: number
+  windowId?: number
+  shortcut?: string
   monitoring?: boolean
   excluded?: string[]
 }

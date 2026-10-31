@@ -22,6 +22,13 @@
       "when": 1791744240614,
       "tag": "0002_perfect_blindfold",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1792007103049,
+      "tag": "0003_colorful_killmonger",
+      "breakpoints": true
     }
   ]
 }

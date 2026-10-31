@@ -26,12 +26,24 @@ export function readSubmission(root: ParentNode): Submission | null {
   // Never mistake a current password or a mismatched confirmation for the new one.
   if (fresh.some((input) => input.value !== selected.value)) return null
   if (passwords.length > 1 && !fresh.length) return null
-  const email = inputs.find(
-    (input) =>
-      input.type === "email" ||
-      /^(username|email)$/i.test(input.autocomplete) ||
-      /email|username|login/i.test(`${input.name} ${input.id}`)
+  const text = inputs.filter((input) =>
+    ["text", "email", "tel"].includes(input.type)
   )
+  const email =
+    text.find(
+      (input) =>
+        input.type === "email" ||
+        /^(username|email)$/i.test(input.autocomplete) ||
+        /email|user|login/i.test(`${input.name} ${input.id}`)
+    ) ??
+    // Sign-in forms only: use the text field just before the password, as browsers do.
+    (fresh.length ? [] : text)
+      .filter(
+        (input) =>
+          input.compareDocumentPosition(selected) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      )
+      .at(-1)
   const description = `${root instanceof Element ? root.textContent : ""} ${root instanceof Element ? root.id : ""}`
   const kind = fresh.length
     ? /sign.?up|register|create account/i.test(description ?? "")

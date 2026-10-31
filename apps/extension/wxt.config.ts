@@ -18,5 +18,20 @@ export default defineConfig({
     ],
     optional_host_permissions: ["http://*/*", "https://*/*"],
     action: { default_title: "Global Login" },
+    commands: {
+      "quick-access": {
+        suggested_key: { default: "Ctrl+Shift+Space", mac: "Command+Shift+Space" },
+        description: "Quick Access: search logins and notes on any page",
+      },
+      _execute_action: {
+        suggested_key: { default: "Alt+Shift+L", mac: "Alt+Shift+L" },
+        description: "Open Global Login",
+      },
+    },
+    // Framed into pages by the Quick Access shortcut; it shows nothing without
+    // a one-time token issued by the service worker.
+    web_accessible_resources: [
+      { resources: ["quick.html"], matches: ["<all_urls>"] },
+    ],
   },
 })

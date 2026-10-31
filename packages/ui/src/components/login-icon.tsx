@@ -1,6 +1,14 @@
 import { useState } from "react"
 import { websiteFavicons } from "@workspace/shared"
-import { Folder, KeyRound, Terminal, Globe, Code, Database } from "lucide-react"
+import {
+  Folder,
+  KeyRound,
+  Terminal,
+  Globe,
+  Code,
+  Database,
+  StickyNote,
+} from "lucide-react"
 
 export const itemIcons = {
   folder: Folder,
@@ -17,18 +25,21 @@ export function ItemIcon({
   large = false,
   folder = false,
   small = false,
+  note = false,
 }: {
   icon?: string
   website?: string
   large?: boolean
   folder?: boolean
   small?: boolean
+  note?: boolean
 }) {
   const [failed, setFailed] = useState<string[]>([])
   const Icon =
-    itemIcons[icon as keyof typeof itemIcons] ?? (folder ? Folder : KeyRound)
+    itemIcons[icon as keyof typeof itemIcons] ??
+    (folder ? Folder : note ? StickyNote : KeyRound)
   const favicon =
-    !icon && !folder
+    !icon && !folder && !note
       ? websiteFavicons(website).find((url) => !failed.includes(url))
       : undefined
   return (

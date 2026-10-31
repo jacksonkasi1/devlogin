@@ -91,3 +91,11 @@ export const preferences = sqliteTable(
   (t) => [primaryKey({ columns: [t.user_id, t.project_id] })]
 )
 import { sql } from "drizzle-orm"
+export const notes = sqliteTable("notes", {
+  id: text().primaryKey(),
+  project_id: text().references(() => projects.id, { onDelete: "cascade" }),
+  title: text().notNull(),
+  icon: text().notNull().default(""),
+  encrypted_content: text().notNull(),
+  ...timestamps,
+})

@@ -1,5 +1,8 @@
 import { z } from "zod"
 
+// Extension CSP forbids Function(); skip Zod's dynamic-code capability probe.
+z.config({ jitless: true })
+
 // Share favicon selection between the dashboard, popup and in-page suggestions.
 // Never send paths, queries or local hostnames to the public fallback service.
 export function websiteFavicons(website?: string): string[] {
@@ -113,6 +116,14 @@ export const accountSchema = z.object({
   login_type: z.enum(["password", "google"]),
   is_default: z.boolean().default(false),
 })
+export const noteSchema = z.object({
+  // Omit on update to keep the current project; null means no project.
+  project_id: z.string().min(1).nullable().optional(),
+  title: z.string().trim().min(1).max(120),
+  icon: z.string().max(32).optional(),
+  // Omit content on update to keep the stored secret unchanged.
+  content: z.string().max(50_000).optional(),
+})
 export const preferenceSchema = z.object({
   project_id: z.string().min(1),
   account_id: z.string().nullable(),
@@ -141,6 +152,16 @@ export type Project = z.infer<typeof projectSchema> & {
 }
 export type Account = Omit<z.infer<typeof accountSchema>, "password"> & {
   id: string
+  created_at: string
+  updated_at: string
+}
+export type Note = Omit<
+  z.infer<typeof noteSchema>,
+  "content" | "project_id"
+> & {
+  id: string
+  project_id: string | null
+  icon: string
   created_at: string
   updated_at: string
 }
@@ -233,6 +254,7 @@ export type Sync = {
   projects: Project[]
   accounts: Account[]
   preferences: Preference[]
+  notes?: Note[]
   revision: string
 }
 export function matchProject(

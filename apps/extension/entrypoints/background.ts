@@ -11,7 +11,7 @@ import {
   type Sync,
   type User,
 } from "@workspace/shared"
-import type { Message, Context, Fill, Reply } from "../src/messages"
+import type { Message, Context, Fill, Reply, Snapshot } from "../src/messages"
 import {
   matchPage,
   localAddress,
@@ -20,11 +20,31 @@ import {
 import { pageActions } from "../src/page-actions"
 import { readUiSettings, saveUiSettings } from "../src/ui-settings"
 import { registerSites, forbidden } from "../src/site-permissions"
+import { mountQuickAccess } from "../src/quick-mount"
 
 export default defineBackground(() => {
   let cache: { data: Sync; at: number } | null = null
   const reservations = new Set<string>()
   const openingLogins = new Set<number>()
+  // One-time Quick Access tokens bind an overlay to the tab it was opened over.
+  const quickSessions = new Map<
+    string,
+    { tabId?: number; windowId?: number; embedded: boolean; expires: number }
+  >()
+  // The fallback Quick Access window behaves like Spotlight: one at a time, gone on blur.
+  let quickWindow: number | undefined
+  browser.windows.onFocusChanged.addListener((windowId) => {
+    if (quickWindow !== undefined && windowId !== quickWindow)
+      void closeQuickWindow()
+  })
+  browser.windows.onRemoved.addListener((windowId) => {
+    if (windowId === quickWindow) quickWindow = undefined
+  })
+  async function closeQuickWindow() {
+    const id = quickWindow
+    quickWindow = undefined
+    if (id !== undefined) await browser.windows.remove(id).catch(() => {})
+  }
   void registerSites().catch(() => {})
   browser.permissions.onAdded.addListener(() => {
     void registerSites().catch(() => {})
@@ -191,6 +211,113 @@ export default defineBackground(() => {
       cache = null
     },
   })
+  async function snapshot(tab?: Browser.tabs.Tab): Promise<Snapshot> {
+    const { origin, token } = await configuration()
+    let user: User | null = null
+    let data: Sync | null = null
+    // Local reads and both API calls run in parallel: opening stays one round trip.
+    const local = Promise.all([
+      browser.permissions.getAll(),
+      browser.storage.local.get("excluded"),
+      browser.commands.getAll().catch(() => []),
+    ])
+    if (token) {
+      const synced = sync(true)
+      synced.catch(() => {})
+      try {
+        user = await api<User>("/api/me")
+        if (user.approved) data = await synced
+      } catch (error) {
+        if (!(error instanceof ApiError && error.status === 401)) throw error
+      }
+    }
+    const [{ origins = [] }, { excluded = [] }, commands] = await local
+    return {
+      origin,
+      user,
+      data,
+      tabUrl: tab?.url ?? "",
+      tabId: tab?.id,
+      windowId: tab?.windowId,
+      shortcut:
+        commands.find((command) => command.name === "quick-access")?.shortcut ||
+        undefined,
+      monitoring: origins.includes("https://*/*"),
+      settings: await readUiSettings(),
+      matchedProjectId:
+        data && tab?.id && tab.url
+          ? ((
+              await matchPage(
+                siteProjects(data, tab.url),
+                tab.url,
+                tab.id
+              ).catch(() => ({ project: undefined }))
+            ).project?.id ?? null)
+          : null,
+      excluded: excluded as string[],
+    }
+  }
+  async function openQuickAccess(tab?: Browser.tabs.Tab) {
+    for (const [key, value] of quickSessions)
+      if (value.expires < Date.now()) quickSessions.delete(key)
+    // Pressing the shortcut again toggles the fallback window off.
+    if (quickWindow !== undefined) return closeQuickWindow()
+    tab ??= (await browser.tabs.query({ active: true, currentWindow: true }))[0]
+    const token = crypto.randomUUID()
+    const session = {
+      tabId: tab?.id,
+      windowId: tab?.windowId,
+      embedded: true,
+      expires: Date.now() + 60_000,
+    }
+    quickSessions.set(token, session)
+    const page = browser.runtime.getURL("/quick.html")
+    // The shortcut grants activeTab, so the overlay works on any normal page.
+    // The token travels by postMessage to the extension origin, never in the frame URL.
+    if (tab?.id && tab.url && /^https?:/.test(tab.url)) {
+      try {
+        await browser.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: mountQuickAccess,
+          args: [page, token],
+        })
+        return
+      } catch {
+        /* Restricted pages fall back to a small centered window. */
+      }
+    }
+    session.embedded = false
+    const parent = tab?.windowId
+      ? await browser.windows.get(tab.windowId).catch(() => undefined)
+      : undefined
+    const width = 720
+    const height = 480
+    const created = await browser.windows.create({
+      url: `${page}?window=1#${token}`,
+      type: "popup",
+      width,
+      height,
+      focused: true,
+      ...(parent?.left !== undefined && parent.width && parent.height
+        ? {
+            left: Math.max(
+              0,
+              Math.round(parent.left + (parent.width - width) / 2)
+            ),
+            top: Math.max(
+              0,
+              Math.round((parent.top ?? 0) + parent.height * 0.15)
+            ),
+          }
+        : {}),
+    })
+    quickWindow = created?.id
+  }
+  browser.commands.onCommand.addListener((command, tab) => {
+    if (command === "quick-access") void openQuickAccess(tab)
+  })
+  // Only extension contexts can reach the service-worker global; used by browser tests.
+  Object.assign(globalThis, { openQuickAccess })
   async function handle(
     message: Message,
     sender: Browser.runtime.MessageSender,
@@ -336,50 +463,33 @@ export default defineBackground(() => {
         return { ok: true }
       }
       case "snapshot": {
-        const { origin, token } = await configuration()
         const [tab] = await browser.tabs.query({
           active: true,
           currentWindow: true,
         })
-        let user: User | null = null
-        let data: Sync | null = null
-        if (token) {
-          try {
-            user = await api<User>("/api/me")
-            if (user.approved) data = await sync(true)
-          } catch (error) {
-            if (!(error instanceof ApiError && error.status === 401))
-              throw error
-          }
-        }
-        const { origins = [] } = await browser.permissions.getAll()
-        const { excluded = [] } = await browser.storage.local.get("excluded")
-        return {
-          origin,
-          user,
-          data,
-          tabUrl: tab?.url ?? "",
-          tabId: tab?.id,
-          monitoring: origins.includes("https://*/*"),
-          settings: await readUiSettings(),
-          matchedProjectId:
-            data && tab?.id && tab.url
-              ? ((
-                  await matchPage(
-                    siteProjects(data, tab.url),
-                    tab.url,
-                    tab.id
-                  ).catch(() => ({
-                    project: undefined,
-                  }))
-                ).project?.id ?? null)
-              : null,
-          excluded,
-        }
+        return snapshot(tab)
+      }
+      case "quick-session": {
+        const session = quickSessions.get(message.token)
+        // Only the overlay frame in the original tab (or the top-level fallback
+        // window) may redeem a token, so a page framing quick.html gets nothing.
+        if (
+          !session ||
+          session.expires < Date.now() ||
+          (session.embedded
+            ? sender.tab?.id !== session.tabId || !sender.frameId
+            : sender.frameId !== 0)
+        )
+          throw new Error("Quick Access expired. Press the shortcut again.")
+        quickSessions.delete(message.token)
+        const tab = session.tabId
+          ? await browser.tabs.get(session.tabId).catch(() => undefined)
+          : undefined
+        return { ...(await snapshot(tab)), windowId: session.windowId }
       }
       case "api": {
         if (
-          !/^\/api\/(projects|accounts|preferences)(\/[a-zA-Z0-9-]+)?(\/password)?$/.test(
+          !/^\/api\/(?:(?:projects|preferences)(?:\/[a-zA-Z0-9-]+)?|accounts(?:\/[a-zA-Z0-9-]+(?:\/password)?)?|notes(?:\/[a-zA-Z0-9-]+(?:\/content)?)?)$/.test(
             message.path
           )
         )
@@ -418,7 +528,10 @@ export default defineBackground(() => {
         )
           throw new Error("Enable Global Login on the saved website first")
         await registerSites()
-        const tab = await browser.tabs.create({ url })
+        const tab = await browser.tabs.create({
+          url,
+          ...(message.windowId ? { windowId: message.windowId } : {}),
+        })
         if (!tab.id) throw new Error("Could not open website")
         openingLogins.add(tab.id)
         try {
@@ -454,11 +567,13 @@ export default defineBackground(() => {
           folder && account ? accountProject(folder, account) : undefined
         if (!account || !project)
           throw new Error("Account no longer exists. Refresh and try again.")
-        const [activeTab] = await browser.tabs.query({
-          active: true,
-          currentWindow: true,
-        })
-        const tab = targetTab ?? activeTab
+        const tab =
+          targetTab ??
+          (message.tabId
+            ? await browser.tabs.get(message.tabId).catch(() => undefined)
+            : (
+                await browser.tabs.query({ active: true, currentWindow: true })
+              )[0])
         if (!tab?.id || !tab.url) throw new Error("No active website")
         const { excluded = [] } = await browser.storage.local.get("excluded")
         if (
@@ -484,7 +599,7 @@ export default defineBackground(() => {
         )
         if (localAddress(tab.url) && matched.project?.id !== project.id)
           throw new Error(
-            "Local project identity does not match. Identify this local project from Home first."
+            "Local project identity does not match. Identify this local project in Settings first."
           )
         if (
           !isLoginPage(accountProject(project, account, tab.url), tab.url) ||
@@ -496,7 +611,8 @@ export default defineBackground(() => {
             ) ?? project.urls[0]!
           await browser.tabs.create({ url: loginUrl(project, environment) })
           return {
-            message: "Login page opened. Open Global Login there and choose Login.",
+            message:
+              "Login page opened. Open Global Login there and choose Login.",
           }
         }
         if (message.submit) await reserve(tab.id, project.id, false)

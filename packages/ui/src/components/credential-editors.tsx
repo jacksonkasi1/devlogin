@@ -1,7 +1,9 @@
-import { useState, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import {
   accountSchema,
+  noteSchema,
   projectSchema,
+  type Note,
   type Project,
   type Account,
   type Website,
@@ -426,6 +428,136 @@ export function AccountEditor({
         </Button>
         <Button disabled={busy} type="submit">
           {busy ? "Saving…" : "Save Login"}
+        </Button>
+      </div>
+    </form>
+  )
+}
+const NO_PROJECT = "none"
+export function NoteEditor({
+  note,
+  projectId,
+  projects = [],
+  loadContent,
+  onSave,
+  onCancel,
+  busy,
+}: {
+  note?: Note
+  projectId?: string | null
+  projects?: Project[]
+  // Existing note bodies are decrypted only when the editor opens.
+  loadContent?: () => Promise<string>
+  onSave: (body: unknown) => void
+  onCancel: () => void
+  busy: boolean
+}) {
+  const [title, setTitle] = useState(note?.title ?? "")
+  const [icon, setIcon] = useState(note?.icon ?? "")
+  const [project, setProject] = useState(
+    note?.project_id ?? projectId ?? NO_PROJECT
+  )
+  const [content, setContent] = useState("")
+  const [original, setOriginal] = useState<string | null>(note ? null : "")
+  useEffect(() => {
+    if (!note || !loadContent) return
+    let active = true
+    loadContent().then(
+      (value) => {
+        if (!active) return
+        setContent(value)
+        setOriginal(value)
+      },
+      () => {
+        if (active) toast.error("Could not decrypt this note")
+      }
+    )
+    return () => {
+      active = false
+    }
+  }, [note, loadContent])
+  const loading = !!note && original === null
+  return (
+    <form
+      className="space-y-4"
+      onSubmit={(event) => {
+        event.preventDefault()
+        const result = noteSchema.safeParse({
+          title,
+          icon,
+          project_id: project === NO_PROJECT ? null : project,
+          // A new note always sends its content, even when empty.
+          ...(!note || content !== original ? { content } : {}),
+        })
+        if (!result.success) {
+          toast.error(result.error.issues[0]?.message ?? "Check note fields")
+          return
+        }
+        onSave(result.data)
+      }}
+    >
+      <div className="flex items-center gap-4">
+        <IconPicker value={icon} onChange={setIcon} />
+        <div className="min-w-0 flex-1">
+          <Field
+            name="note-title"
+            label="Title"
+            value={title}
+            onChange={setTitle}
+            placeholder="e.g. Staging API keys"
+            required
+          />
+        </div>
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="note-content">Secure note</Label>
+        <Textarea
+          id="note-content"
+          className="min-h-40 font-mono text-xs"
+          rows={8}
+          value={content}
+          disabled={loading}
+          placeholder={
+            loading ? "Decrypting…" : "Secrets, keys, recovery codes…"
+          }
+          onChange={(event) => setContent(event.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <p className="text-xs text-muted-foreground">
+          Encrypted before it is stored. Shown only when someone opens it.
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-4">
+        <div className="mr-auto min-w-36">
+          <Choice
+            label="Project"
+            value={project}
+            options={[
+              { value: NO_PROJECT, label: "No project" },
+              ...projects.map((p) => ({
+                value: p.id,
+                label: (
+                  <span className="flex items-center gap-2">
+                    <ItemIcon icon={p.icon} folder small />
+                    {p.name}
+                  </span>
+                ),
+              })),
+            ]}
+            onChange={setProject}
+          />
+        </div>
+        <Button
+          disabled={busy}
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+        >
+          Cancel
+        </Button>
+        <Button disabled={busy || loading} type="submit">
+          {busy ? "Saving…" : "Save Note"}
         </Button>
       </div>
     </form>

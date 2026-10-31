@@ -1,9 +1,10 @@
-import { useState, type ReactNode } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 import {
   apiRequest,
   accountWebsites,
   type Project,
   type Account,
+  type Note,
   type Sync,
 } from "@workspace/shared"
 import {
@@ -52,14 +53,17 @@ import {
 import {
   ProjectEditor,
   AccountEditor,
+  NoteEditor,
 } from "@workspace/ui/components/credential-editors"
 import { ItemIcon } from "@workspace/ui/components/item-icon"
 import { AccountPassword } from "./account-password"
+import { NoteContent, readNote } from "./note-content"
 import { toast } from "@workspace/ui/components/sonner"
 
 export type Editor =
   | { kind: "project"; project?: Project }
   | { kind: "account"; project?: Project; account?: Account }
+  | { kind: "note"; project?: Project; note?: Note }
   | { kind: "delete"; path: string; title: string }
   | null
 
@@ -70,6 +74,7 @@ export function ManagementDialogs({
   data,
   onProject,
   onAccount,
+  onNote,
 }: {
   editor: Editor
   setEditor: (value: Editor) => void
@@ -77,22 +82,28 @@ export function ManagementDialogs({
   data: Sync | null
   onProject: (project: Project) => void
   onAccount: (account: Account) => void
+  onNote: (note: Note) => void
 }) {
   const [busy, setBusy] = useState(false)
   const project =
     editor?.kind === "account"
       ? (editor.project ?? data?.projects[0])
       : undefined
+  const loadNote = useMemo(() => {
+    const id = editor?.kind === "note" ? editor.note?.id : undefined
+    return id ? () => readNote(id) : undefined
+  }, [editor])
   async function save(path: string, method: string, body: unknown) {
     setBusy(true)
     try {
-      const result = await apiRequest<Project | Account>("", path, {
+      const result = await apiRequest<Project | Account | Note>("", path, {
         method,
         body: JSON.stringify(body),
       })
       await refresh()
       if (editor?.kind === "project") onProject(result as Project)
       if (editor?.kind === "account") onAccount(result as Account)
+      if (editor?.kind === "note") onNote(result as Note)
       setEditor(null)
       toast.success(method === "DELETE" ? "Deleted" : "Saved and synced")
     } catch (error) {
@@ -114,7 +125,7 @@ export function ManagementDialogs({
             <AlertDialogTitle>{editor.title}</AlertDialogTitle>
             <AlertDialogDescription>
               This deletes the shared record for every developer. Project
-              deletion also removes its accounts.
+              deletion also removes its logins and notes.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -147,14 +158,20 @@ export function ManagementDialogs({
               ? editor.account
                 ? "Edit login"
                 : "Add login"
-              : editor?.project
-                ? "Edit project"
-                : "Add project"}
+              : editor?.kind === "note"
+                ? editor.note
+                  ? "Edit secure note"
+                  : "Add secure note"
+                : editor?.project
+                  ? "Edit project"
+                  : "Add project"}
           </DialogTitle>
           <DialogDescription>
             {editor?.kind === "account"
               ? "Save a login to your shared workspace."
-              : "Organize your logins in a project."}
+              : editor?.kind === "note"
+                ? "Store API keys, recovery codes and other secrets, encrypted."
+                : "Organize your logins in a project."}
           </DialogDescription>
         </DialogHeader>
         <fieldset disabled={busy} className="min-w-0 space-y-3">
@@ -170,6 +187,24 @@ export function ManagementDialogs({
                     ? `/api/projects/${editor.project.id}`
                     : "/api/projects",
                   editor.project ? "PUT" : "POST",
+                  body
+                )
+              }
+            />
+          )}
+          {editor?.kind === "note" && (
+            <NoteEditor
+              key={editor.note?.id ?? "new"}
+              note={editor.note}
+              projectId={editor.project?.id ?? null}
+              projects={data?.projects ?? []}
+              loadContent={loadNote}
+              busy={busy}
+              onCancel={() => setEditor(null)}
+              onSave={(body) =>
+                void save(
+                  editor.note ? `/api/notes/${editor.note.id}` : "/api/notes",
+                  editor.note ? "PUT" : "POST",
                   body
                 )
               }
@@ -290,15 +325,35 @@ export function ProjectsView({
   const canDrop = (p: Project) =>
     admin && !loading && !moving && !!dragged && dragged.project_id !== p.id
   const query = search.trim().toLowerCase()
-  const accounts = (data?.accounts ?? []).filter(
-    (a) =>
+  const accounts = (data?.accounts ?? []).filter((a) => {
+    const p = projects.find((p) => p.id === a.project_id)
+    return (
       (!selected || a.project_id === selected.id) &&
-      `${a.label} ${a.email} ${a.environment} ${projects.find((p) => p.id === a.project_id)?.name ?? ""}`
+      `${a.label} ${a.email} ${p?.name ?? ""} ${accountWebsites(a, p)
+        .map((site) => site.url)
+        .join(" ")}`
+        .toLowerCase()
+        .includes(query)
+    )
+  })
+  const notes = (data?.notes ?? []).filter(
+    (n) =>
+      (!selected || n.project_id === selected.id) &&
+      `${n.title} ${projects.find((p) => p.id === n.project_id)?.name ?? ""} secure note`
         .toLowerCase()
         .includes(query)
   )
+  const itemCount = (projectId?: string) =>
+    (data?.accounts ?? []).filter(
+      (a) => !projectId || a.project_id === projectId
+    ).length +
+    (data?.notes ?? []).filter((n) => !projectId || n.project_id === projectId)
+      .length
   const account = accounts.find((a) => a.id === accountId)
-  const project = projects.find((p) => p.id === account?.project_id)
+  const note = notes.find((n) => n.id === accountId)
+  const project = projects.find(
+    (p) => p.id === (account?.project_id ?? note?.project_id)
+  )
   const panel = mobilePanel
   const chooseProject = (p: Project | null) => {
     setSelected(p)
@@ -334,9 +389,9 @@ export function ProjectsView({
               onClick={() => chooseProject(null)}
             >
               <KeyRound className="size-4" />
-              <span className="flex-1">All Logins</span>
+              <span className="flex-1">All Items</span>
               <span className="text-xs text-muted-foreground">
-                {data?.accounts.length ?? 0}
+                {itemCount()}
               </span>
             </button>
             <Separator className="my-3" />
@@ -381,10 +436,7 @@ export function ProjectsView({
                     <ItemIcon icon={p.icon} folder />
                     <span className="min-w-0 flex-1 truncate">{p.name}</span>
                     <span className="text-xs text-muted-foreground">
-                      {
-                        data?.accounts.filter((a) => a.project_id === p.id)
-                          .length
-                      }
+                      {itemCount(p.id)}
                     </span>
                   </button>
                 ))}
@@ -416,10 +468,10 @@ export function ProjectsView({
             <ArrowLeft />
           </Button>
           <h2 className="min-w-0 flex-1 truncate text-sm font-medium">
-            {selected?.name ?? "All Logins"}
+            {selected?.name ?? "All Items"}
           </h2>
           <span className="text-xs text-muted-foreground">
-            {accounts.length}
+            {accounts.length + notes.length}
           </span>
           {selected && admin && (
             <DropdownMenu>
@@ -512,12 +564,36 @@ export function ProjectsView({
                     </button>
                   )
                 })}
-            {data && !accounts.length && (
+            {notes.length > 0 && accounts.length > 0 && (
+              <p className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground">
+                Secure notes
+              </p>
+            )}
+            {notes.map((n) => (
+              <button
+                key={n.id}
+                aria-pressed={note?.id === n.id}
+                className={`${row} py-3 ${note?.id === n.id ? "bg-accent ring-1 ring-border ring-inset" : ""}`}
+                onClick={() => {
+                  setAccountId(n.id)
+                  setMobilePanel("details")
+                }}
+              >
+                <ItemIcon icon={n.icon || undefined} note />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{n.title}</span>
+                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                    Secure note
+                  </span>
+                </span>
+              </button>
+            ))}
+            {data && !accounts.length && !notes.length && (
               <div className="px-3 py-8 text-sm text-muted-foreground">
-                <p>{query ? "No matching logins" : "No logins yet"}</p>
+                <p>{query ? "No matching items" : "No logins yet"}</p>
                 <p className="mt-1 text-xs">
                   {query
-                    ? "Try a different name, username, or website."
+                    ? "Try a different title, username, or website."
                     : admin
                       ? "Use Add Login to save an account."
                       : "Your administrator can add logins."}
@@ -543,9 +619,53 @@ export function ProjectsView({
               <ArrowLeft />
             </Button>
             <span className="truncate text-xs text-muted-foreground">
-              {project ? `${project.name} / Login` : "Login details"}
+              {note
+                ? `${project ? `${project.name} / ` : ""}Secure note`
+                : project
+                  ? `${project.name} / Login`
+                  : "Login details"}
             </span>
           </div>
+          {note && admin && (
+            <div className="flex gap-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setEditor({ kind: "note", note, project })}
+              >
+                <Pencil />
+                Edit
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Note actions"
+                    />
+                  }
+                >
+                  <MoreHorizontal />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onClick={() =>
+                      setEditor({
+                        kind: "delete",
+                        path: `/api/notes/${note.id}`,
+                        title: `Delete ${note.title}?`,
+                      })
+                    }
+                  >
+                    <Trash2 />
+                    Delete note
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
           {account && project && admin && (
             <div className="flex gap-1">
               <Button
@@ -588,7 +708,38 @@ export function ProjectsView({
           )}
         </div>
         <ScrollArea className="min-h-0 flex-1">
-          {account && project ? (
+          {note ? (
+            <div className="mx-auto max-w-3xl p-6 lg:p-10">
+              <div className="mb-8 flex items-center gap-4">
+                <ItemIcon icon={note.icon || undefined} note large />
+                <div className="min-w-0">
+                  <h1 className="text-xl font-semibold break-words">
+                    {note.title}
+                  </h1>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {project?.name ?? "Secure note"}
+                  </p>
+                </div>
+              </div>
+              <dl className="divide-y border-y">
+                <NoteContent
+                  key={`${note.id}:${note.updated_at}`}
+                  noteId={note.id}
+                />
+                {project && (
+                  <Field label="Project">
+                    <span className="flex items-center gap-2">
+                      <ItemIcon icon={project.icon} folder />
+                      {project.name}
+                    </span>
+                  </Field>
+                )}
+              </dl>
+              <p className="mt-6 text-xs text-muted-foreground">
+                Last updated {new Date(note.updated_at).toLocaleString()}
+              </p>
+            </div>
+          ) : account && project ? (
             <div className="mx-auto max-w-3xl p-6 lg:p-10">
               <div className="mb-8 flex items-center gap-4">
                 <ItemIcon
@@ -689,10 +840,10 @@ export function ProjectsView({
           ) : (
             <div className="flex min-h-[55dvh] flex-col items-center justify-center gap-3 p-6 text-center">
               <KeyRound className="size-8 text-muted-foreground/50" />
-              <h2 className="text-sm font-medium">Select an account</h2>
+              <h2 className="text-sm font-medium">Select an item</h2>
               <p className="max-w-64 text-xs text-muted-foreground">
-                Choose a login to view its details and securely copy
-                credentials.
+                Choose a login or secure note to view its details and securely
+                copy secrets.
               </p>
             </div>
           )}
