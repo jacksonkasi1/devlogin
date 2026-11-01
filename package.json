@@ -20,7 +20,7 @@
     "test:browser": "bun run build:web && bun run build:extension && playwright test",
     "test:deployment": "node scripts/deployment-smoke.mjs",
     "extension:zip": "bun run --cwd apps/extension zip",
-    "extension:store": "bun run --cwd apps/extension zip:store",
+    "extension:store": "bun run --cwd apps/extension zip:store && node scripts/store-release.mjs",
     "extension:store-assets": "node scripts/store-icons.mjs && bun run build:web && bun run build:extension && node scripts/store-screenshots.mjs",
     "lint": "turbo lint",
     "format": "prettier --write apps/*/src apps/extension/entrypoints packages/shared/src packages/ui/src tests scripts *.ts *.json README.md",

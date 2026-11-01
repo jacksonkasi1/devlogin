@@ -39,5 +39,5 @@ playwright-report
 
 # typescript
 *.tsbuildinfo
-apps/extension/store/upload/
+release/
 apps/extension/store/raw/

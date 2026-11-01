@@ -1,10 +1,10 @@
 # Chrome Web Store listing — Global Login
 
-Rebuild everything with `bun run extension:store-assets`. That needs openssl on PATH. Build the upload zip with `bun run extension:store`; it writes `apps/extension/.output/extension-1.0.0-chrome.zip`.
+Step-by-step instructions are in [PUBLISH.md](PUBLISH.md). This file holds the text to paste into each field.
 
 ## Package
 
-- **Upload:** `apps/extension/.output/extension-<version>-chrome.zip`. This is a store build: it has no `key` and no localhost hosts.
+- **Upload:** `release/global-login-<version>.zip` at the repo root, built by `bun run extension:store`. This store build has no `key` and no localhost hosts.
 - **Before the first release:** the store assigns a new extension ID. Add it to `EXTENSION_IDS` in `apps/worker/wrangler.jsonc` and deploy, or Google sign-in will be refused. You can also pin the store ID: copy the public key from Dashboard → Package → "View public key" into the `key` in `wxt.config.ts` for unpacked builds.
 
 ## Store listing
