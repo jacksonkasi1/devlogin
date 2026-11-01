@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="application-name" content="Acme Commerce">
+<title>Sign in · Acme Commerce</title>
+<style>
+  * { box-sizing: border-box }
+  body { margin: 0; min-height: 100vh; font-family: Inter, "Segoe UI", system-ui, sans-serif; background: #f4f5f8; color: #111827; display: grid; grid-template-columns: 1fr 1fr }
+  .brand { background: linear-gradient(150deg, #ff7a3d, #e5452b); color: #fff; padding: 56px; display: flex; flex-direction: column; justify-content: space-between }
+  .logo { font-weight: 800; font-size: 22px; letter-spacing: -.02em }
+  .brand h2 { font-size: 40px; line-height: 1.1; margin: 0 0 12px; letter-spacing: -.03em }
+  .brand p { opacity: .85; margin: 0; font-size: 17px }
+  main { display: grid; place-items: center; padding: 40px }
+  form { width: 360px }
+  h1 { font-size: 26px; margin: 0 0 6px; letter-spacing: -.02em }
+  .sub { color: #6b7280; margin: 0 0 28px }
+  label { display: block; font-size: 14px; font-weight: 600; margin: 0 0 6px }
+  input { width: 100%; height: 44px; border: 1px solid #d1d5db; border-radius: 10px; padding: 0 14px; font: inherit; background: #fff; margin-bottom: 18px }
+  button { width: 100%; height: 46px; border: 0; border-radius: 10px; background: #111827; color: #fff; font: inherit; font-weight: 600 }
+  .env { display: inline-block; font-size: 12px; font-weight: 700; background: #fff3cd; color: #8a5a00; border-radius: 999px; padding: 4px 10px; margin-bottom: 18px }
+</style>
+</head>
+<body>
+  <aside class="brand">
+    <div class="logo">● acme</div>
+    <div><h2>Run your store<br>from one place.</h2><p>Orders, inventory and customers.</p></div>
+    <small style="opacity:.7">© Acme Commerce · demo</small>
+  </aside>
+  <main>
+    <form id="login" autocomplete="on">
+      <span class="env">STAGING</span>
+      <h1>Sign in</h1>
+      <p class="sub">Welcome back to the admin console.</p>
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" autocomplete="username" placeholder="you@company.com">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••">
+      <button type="submit">Sign in</button>
+    </form>
+  </main>
+  <script>document.querySelector("form").addEventListener("submit", (e) => e.preventDefault())</script>
+</body>
+</html>

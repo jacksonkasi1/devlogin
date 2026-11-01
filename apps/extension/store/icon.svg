@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3b6cff"/>
+      <stop offset="1" stop-color="#1238c9"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".18"/>
+      <stop offset=".5" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <!-- Chrome Web Store: 96px artwork centred in a 128px canvas -->
+  <rect x="16" y="16" width="96" height="96" rx="24" fill="url(#tile)"/>
+  <rect x="16" y="16" width="96" height="96" rx="24" fill="url(#shine)"/>
+  <g fill="none" stroke="#fff" stroke-width="3.5" stroke-opacity=".38" stroke-linecap="round">
+    <circle cx="64" cy="64" r="32"/>
+    <ellipse cx="64" cy="64" rx="14" ry="32"/>
+    <path d="M33 53h62M33 75h62"/>
+  </g>
+  <circle cx="64" cy="64" r="21" fill="#fff"/>
+  <path d="M64 51.5a7 7 0 0 0-3.6 13l-2.4 10.5h12l-2.4-10.5a7 7 0 0 0-3.6-13z" fill="#1d47dc"/>
+</svg>
