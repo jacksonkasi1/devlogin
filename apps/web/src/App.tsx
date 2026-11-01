@@ -16,6 +16,7 @@ import {
   CardContent,
 } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
+import { BrandMark } from "@workspace/ui/components/brand-mark"
 import { Tabs, TabsContent } from "@workspace/ui/components/tabs"
 import {
   Table,
@@ -227,6 +228,7 @@ export function App() {
         </div>
         <Card className="w-full max-w-sm">
           <CardHeader>
+            <BrandMark globe className="mb-2 size-12" />
             <CardTitle>Global Login</CardTitle>
             <CardDescription>Peacock Projects</CardDescription>
           </CardHeader>
@@ -295,7 +297,7 @@ export function App() {
             onClick={() => setTab("projects")}
             aria-label="Global Login logins"
           >
-            <KeyRound className="size-5" />
+            <BrandMark className="size-7" />
             <span className="flex flex-col items-start">
               <span>Global Login</span>
               <span className="text-xs font-normal text-muted-foreground">

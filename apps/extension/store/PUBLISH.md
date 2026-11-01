@@ -26,7 +26,7 @@ bun run extension:store-assets
 bun run deploy
 ```
 
-Then check that https://devlogin.peacockindia.in/privacy.html opens. The Store requires this URL to work.
+Then check that https://devlogin.peacockindia.in/privacy opens. The Store requires this URL to work.
 
 ## 3. Upload the package
 
@@ -55,7 +55,7 @@ Click **Save draft**.
 2. **Permission justification:** paste the matching line for each of storage, identity, tabs, activeTab, scripting, and host permissions.
 3. **Are you using remote code?** No.
 4. **Data usage:** tick Personally identifiable information, Authentication information and Website content. Then tick all three certification boxes.
-5. **Privacy policy URL:** `https://devlogin.peacockindia.in/privacy.html`
+5. **Privacy policy URL:** `https://devlogin.peacockindia.in/privacy`
 
 Click **Save draft**.
 

@@ -47,7 +47,7 @@ When you sign in, sign up or change a password on a project site, Global Login o
 • Light and dark themes, and keyboard-first everywhere.
 
 PRIVACY
-Global Login only reads login forms on your team's project sites, or on sites you enable. It never reads Google sign-in pages, never tracks browsing, and never sells or shares data. Privacy policy: https://devlogin.peacockindia.in/privacy.html
+Global Login only reads login forms on your team's project sites, or on sites you enable. It never reads Google sign-in pages, never tracks browsing, and never sells or shares data. Privacy policy: https://devlogin.peacockindia.in/privacy
 
 Global Login requires a workspace account. Ask your team administrator for access.
 ```
@@ -93,7 +93,7 @@ Global Login lets members of a team securely store, find and fill their shared w
 - I do not use or transfer user data for purposes that are unrelated to my item's single purpose
 - I do not use or transfer user data to determine creditworthiness or for lending purposes
 
-**Privacy policy URL:** https://devlogin.peacockindia.in/privacy.html. It goes live with the next `bun run deploy`.
+**Privacy policy URL:** https://devlogin.peacockindia.in/privacy. It goes live with the next `bun run deploy`.
 
 ## Distribution
 

@@ -25,6 +25,7 @@ import {
 } from "@workspace/ui/components/dropdown-menu"
 import { Toaster, toast } from "@workspace/ui/components/sonner"
 import { ItemIcon } from "@workspace/ui/components/item-icon"
+import { BrandMark } from "@workspace/ui/components/brand-mark"
 import {
   ProjectEditor,
   AccountEditor,
@@ -598,7 +599,7 @@ export function App() {
         </section>
       ) : !user?.approved || !data ? (
         <section className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-          <KeyRound className="size-8 text-muted-foreground" />
+          <BrandMark globe className="size-12" />
           <h1 className="text-lg font-semibold">
             {!user
               ? "Welcome to Global Login"
