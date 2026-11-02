@@ -6,6 +6,7 @@ import { detectForm, fillForm, googleButton } from "../src/forms"
 import { readSubmission } from "../src/submission"
 import type { UiSettings } from "../src/ui-settings"
 import { inpage } from "../src/inpage"
+import { localAddress } from "../src/local-identity"
 
 export default defineContentScript({
   registration: "runtime",
@@ -92,7 +93,11 @@ export default defineContentScript({
           pageContext = await send<PageContext>({ type: "page" })
           pageAt = Date.now()
         }
-        if (!pageContext.admin) return
+        if (
+          !pageContext.admin ||
+          (!pageContext.project && !localAddress(location.href))
+        )
+          return
         // Deduplicate submit/click events without retaining passwords in content-script state.
         let signature = 0
         for (const char of JSON.stringify(data))

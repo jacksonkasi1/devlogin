@@ -15,7 +15,6 @@ export function PopupSettings({
   busy,
   act,
   snapshot,
-  permission,
 }: {
   user: User | null | undefined
   origin: string
@@ -25,7 +24,6 @@ export function PopupSettings({
   busy: boolean
   act: (action: () => Promise<unknown>, success?: string) => Promise<void>
   snapshot: Snapshot | null
-  permission: (wide?: boolean) => Promise<void>
 }) {
   return (
     <section className="py-4">
@@ -63,28 +61,10 @@ export function PopupSettings({
           Save backend
         </Button>
         <div className="space-y-2">
-          <Label>Website monitoring</Label>
+          <Label>Excluded websites</Label>
           <p className="text-xs text-muted-foreground">
-            Optional browser-wide access.
+            Global Login stays off on these sites.
           </p>
-          <Button
-            variant="outline"
-            disabled={busy}
-            onClick={() =>
-              snapshot?.monitoring
-                ? void act(async () => {
-                    await browser.permissions.remove({
-                      origins: ["https://*/*", "http://*/*"],
-                    })
-                    await send({ type: "permissions-changed" })
-                  }, "Browser-wide monitoring disabled")
-                : void permission(true)
-            }
-          >
-            {snapshot?.monitoring
-              ? "Disable browser-wide monitoring"
-              : "Enable browser-wide monitoring"}
-          </Button>
           {snapshot?.excluded?.map((value) => (
             <div className="flex items-center gap-2 text-xs" key={value}>
               <span>{value}</span>

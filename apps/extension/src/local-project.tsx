@@ -21,7 +21,9 @@ export function LocalProject({
     (snapshot.data ? siteProjects(snapshot.data, snapshot.tabUrl) : []).filter(
       (project) => matchProject([project], snapshot.tabUrl)
     ) ?? []
-  if (!projects.length) return null
+  // A single project is learned automatically unless another app took the port.
+  if (!projects.length || (projects.length === 1 && snapshot.matchedProjectId))
+    return null
   const value = projects.some((project) => project.id === selected)
     ? selected
     : (snapshot.matchedProjectId ?? projects[0]!.id)
@@ -29,9 +31,8 @@ export function LocalProject({
     <div className="space-y-2 rounded-lg border border-amber-500/25 bg-amber-500/5 p-3">
       <p className="text-sm font-medium">Local project identity</p>
       <p className="text-xs text-muted-foreground">
-        Reusing this port? Identify the running project using its page title or
-        app metadata. Filling pauses when the identity changes. Use distinct
-        application-name meta tags for apps with identical titles.
+        Pick the project running on this address. Global Login remembers it by
+        the page title and asks again only if a different app appears here.
       </p>
       <Choice
         label="Local project"

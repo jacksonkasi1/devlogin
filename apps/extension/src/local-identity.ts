@@ -69,6 +69,25 @@ export async function matchPage(
   const { localBindings = [] } =
     await browser.storage.local.get("localBindings")
   const bindings = localBindings as LocalBinding[]
+  // A single project on this port is learned on first use, so there is no
+  // identification step; a different app on the port later still fails below.
+  const origin = new URL(address).origin
+  if (
+    eligible.length === 1 &&
+    (identity.title || identity.application || identity.site) &&
+    !bindings.some(
+      (binding) =>
+        binding.projectId === eligible[0]!.id && binding.origin === origin
+    )
+  ) {
+    await browser.storage.local.set({
+      localBindings: [
+        ...bindings,
+        { projectId: eligible[0]!.id, origin, identity },
+      ],
+    })
+    return { project: eligible[0], identity }
+  }
   const matches = eligible.filter(
     (project) =>
       matchProject([project], address) &&

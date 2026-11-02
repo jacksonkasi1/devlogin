@@ -47,7 +47,7 @@ When you sign in, sign up or change a password on a project site, Global Login o
 • Light and dark themes, and keyboard-first everywhere.
 
 PRIVACY
-Global Login only reads login forms on your team's project sites, or on sites you enable. It never reads Google sign-in pages, never tracks browsing, and never sells or shares data. Privacy policy: https://devlogin.peacockindia.in/privacy
+Global Login only reads login forms on your team's project sites. It never reads Google sign-in pages, never tracks browsing, and never sells or shares data. Privacy policy: https://devlogin.peacockindia.in/privacy
 
 Global Login requires a workspace account. Ask your team administrator for access.
 ```
@@ -77,15 +77,14 @@ Global Login lets members of a team securely store, find and fill their shared w
 - **tabs:** Reads the active tab's URL to suggest the matching project logins. Also opens a project's login page in a new tab when the user clicks "Open & Fill".
 - **activeTab:** When the user presses the Quick Access shortcut or opens the popup, the extension gets temporary access to the current page so it can show the Quick Access panel and fill the chosen login.
 - **scripting:** Injects the Quick Access panel and the form-filling script into the current tab. Also registers the login-form detector on sites that belong to the user's projects.
-- **Host permission (devlogin.peacockindia.in):** This is the Global Login backend API, which syncs the team's projects, logins and notes.
-- **Optional host permissions (http://*/*, https://*/*):** Requested at runtime only when the user enables autofill or auto-login on a project's website. They are needed because each team's project sites are arbitrary domains (staging, QA and production hosts) that cannot be known in advance.
+- **Host permissions (http://*/*, https://*/*):** Like other password managers, Global Login shows the team's saved logins in a small menu under the username and password fields and fills them on click. A team's project sites are arbitrary domains (staging, QA, UAT and production hosts) that are added in the dashboard at any time and cannot be known in advance, so the extension needs access to all sites. On sites that are not part of a project it shows nothing and reads nothing. The same permission covers the Global Login backend API (devlogin.peacockindia.in), which syncs the team's projects, logins and notes.
 - **Remote code:** No. All JavaScript is packaged in the extension.
 
 **Data usage — check these:**
 
 - Personally identifiable information (name and email from Google sign-in)
 - Authentication information (the website usernames and passwords the team saves)
-- Website content (login form fields on the user's project sites only)
+- Website content (login form fields on the team's project sites only)
 
 **Certifications — tick all three:**
 

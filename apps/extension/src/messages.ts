@@ -62,7 +62,6 @@ export type Snapshot = {
   tabId?: number
   windowId?: number
   shortcut?: string
-  monitoring?: boolean
   excluded?: string[]
 }
 export type PageContext = {

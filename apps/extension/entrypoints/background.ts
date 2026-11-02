@@ -217,7 +217,6 @@ export default defineBackground(() => {
     let data: Sync | null = null
     // Local reads and both API calls run in parallel: opening stays one round trip.
     const local = Promise.all([
-      browser.permissions.getAll(),
       browser.storage.local.get("excluded"),
       browser.commands.getAll().catch(() => []),
     ])
@@ -231,7 +230,7 @@ export default defineBackground(() => {
         if (!(error instanceof ApiError && error.status === 401)) throw error
       }
     }
-    const [{ origins = [] }, { excluded = [] }, commands] = await local
+    const [{ excluded = [] }, commands] = await local
     return {
       origin,
       user,
@@ -242,7 +241,6 @@ export default defineBackground(() => {
       shortcut:
         commands.find((command) => command.name === "quick-access")?.shortcut ||
         undefined,
-      monitoring: origins.includes("https://*/*"),
       settings: await readUiSettings(),
       matchedProjectId:
         data && tab?.id && tab.url

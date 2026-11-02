@@ -222,25 +222,6 @@ export function App() {
       )
     })
   }
-  async function permission(wide = false) {
-    try {
-      if (
-        !(await browser.permissions.request({
-          origins: wide
-            ? ["https://*/*", "http://*/*"]
-            : [new URL(snapshot?.tabUrl ?? "").origin + "/*"],
-        }))
-      )
-        throw new Error("Site permission was not granted")
-      await send({ type: "permissions-changed" })
-      await refresh()
-      toast.success("Global Login enabled")
-    } catch (failure) {
-      toast.error(
-        failure instanceof Error ? failure.message : "Could not enable site"
-      )
-    }
-  }
   const create = (kind: "account" | "note" | "project") =>
     setEditor(
       kind === "account" && !projects.length ? { kind: "project" } : { kind }
@@ -421,9 +402,6 @@ export function App() {
             {host && (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => void permission()}>
-                  Enable Global Login on this site
-                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() =>
                     void act(() =>
@@ -491,7 +469,6 @@ export function App() {
                 busy={busy}
                 act={act}
                 snapshot={snapshot}
-                permission={permission}
               />
               <div className="space-y-2 border-t py-4">
                 <Label>Keyboard shortcuts</Label>

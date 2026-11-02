@@ -173,14 +173,6 @@ export async function autofill(
         sites[0].url
       )
   if (!target) throw new Error("Add a website to this login first")
-  // A no-op when already granted; otherwise Chrome asks once for this site.
-  if (
-    !(await browser.permissions.request({
-      origins: [new URL(target).origin + "/*"],
-    }))
-  )
-    throw new Error("Site permission was not granted")
-  await send({ type: "permissions-changed" })
   const result = await send<{ message: string }>(
     here
       ? {

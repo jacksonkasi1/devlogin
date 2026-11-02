@@ -138,7 +138,14 @@ export function pageActions(deps: {
         return fill
       }
       case "observe": {
-        if (!context.admin || saving.has(tabId)) return null
+        // Project sites and local apps only: host access covers every site for
+        // inline fill, but personal logins elsewhere are never offered.
+        if (
+          !context.admin ||
+          (!context.project && !localAddress(sender.url!)) ||
+          saving.has(tabId)
+        )
+          return null
         const input = submissionSchema.parse(message)
         const passwordAccounts = context.accounts.filter(
           (a) => a.login_type === "password"

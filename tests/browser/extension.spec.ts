@@ -699,7 +699,7 @@ test("signup saves a new account and reset password allows choosing an existing 
   ).toBe("fixture-password")
   await page.close()
 })
-test("unknown enabled website offers project creation; navigation keeps only a short-lived confirmation", async () => {
+test("unknown local website offers project creation; navigation keeps only a short-lived confirmation", async () => {
   const page = await context.newPage()
   await page.goto("http://127.0.0.1:8798/login")
   await page.waitForTimeout(1500)
@@ -936,15 +936,8 @@ test("unapproved users and regular members cannot capture or save shared credent
   expect((await savedAccounts()).length).toBe(1)
   await page.close()
 })
-test("ungranted unknown websites receive no monitoring content script", async () => {
+test("unknown websites get no suggestions or save prompts", async () => {
   const address = "https://unregistered.example.test/login"
-  const granted = await worker.evaluate(async () => {
-    // @ts-expect-error Chrome global
-    return chrome.permissions.contains({
-      origins: ["https://unregistered.example.test/*"],
-    })
-  })
-  expect(granted).toBe(false)
   await context.route("https://unregistered.example.test/**", (route) =>
     route.fulfill({
       contentType: "text/html",
@@ -955,8 +948,10 @@ test("ungranted unknown websites receive no monitoring content script", async ()
   await page.goto(address)
   await page.locator("#email").fill("private@example.com")
   await page.locator("#password").fill("private-password")
+  await page.getByRole("button", { name: "Login" }).click()
   await page.waitForTimeout(1200)
-  await expect(page.locator("devlogin-ui")).not.toBeAttached()
+  await expect(page.locator("devlogin-ui .dropdown")).not.toBeAttached()
+  await expect(page.locator("devlogin-ui .surface")).not.toBeAttached()
   await page.close()
   await context.unroute("https://unregistered.example.test/**")
 })
