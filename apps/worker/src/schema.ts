@@ -18,7 +18,20 @@ export const users = sqliteTable("users", {
   avatar_url: text(),
   approved: integer({ mode: "boolean" }).notNull().default(false),
   is_admin: integer({ mode: "boolean" }).notNull().default(false),
+  // Everyone approved can add/change/remove logins unless an admin makes them view-only.
+  can_edit: integer({ mode: "boolean" }).notNull().default(true),
+  can_backup: integer({ mode: "boolean" }).notNull().default(true),
   ...timestamps,
+})
+// Per-user MCP access token. Kept out of `users` so user listings never carry token material.
+export const mcpTokens = sqliteTable("mcp_tokens", {
+  user_id: text()
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  token_hash: text().notNull().unique(),
+  encrypted_token: text().notNull(),
+  created_at: text().notNull(),
+  last_used_at: text(),
 })
 export const sessions = sqliteTable("sessions", {
   token_hash: text().primaryKey(),

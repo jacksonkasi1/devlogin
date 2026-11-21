@@ -43,6 +43,7 @@ import {
 } from "@workspace/ui/components/devlogin-icons"
 import { PopupSettings } from "../../src/popup-settings"
 import { LocalProject } from "../../src/local-project"
+import { SetupChecklist } from "../../src/setup-checklist"
 import { send } from "../../src/client"
 import type { Snapshot } from "../../src/messages"
 
@@ -120,6 +121,7 @@ export function App() {
   }, [theme])
   const data = snapshot?.data
   const user = snapshot?.user
+  const canEdit = !!user && (user.is_admin || user.can_edit)
   const projects = data?.projects ?? []
   const project = projects.find((item) => item.id === projectId)
   const accounts = (data?.accounts ?? []).filter((item) => {
@@ -181,25 +183,6 @@ export function App() {
       )
     }
   }
-  async function permission(wide = false) {
-    try {
-      if (
-        !(await browser.permissions.request({
-          origins: wide
-            ? ["https://*/*", "http://*/*"]
-            : [new URL(snapshot?.tabUrl ?? "").origin + "/*"],
-        }))
-      )
-        throw new Error("Site permission was not granted")
-      await send({ type: "permissions-changed" })
-      await refresh()
-      toast.success("DevLogin enabled")
-    } catch (failure) {
-      toast.error(
-        failure instanceof Error ? failure.message : "Could not enable site"
-      )
-    }
-  }
   const addAccount = () => {
     setEditingAccount(undefined)
     if (!projects.length) {
@@ -225,7 +208,7 @@ export function App() {
             Copy password
           </DropdownMenuItem>
         )}
-        {user?.is_admin && (
+        {canEdit && (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem
@@ -307,7 +290,7 @@ export function App() {
             onChange={(event) => setSearch(event.target.value)}
           />
         </div>
-        {user?.approved && user.is_admin && (
+        {user?.approved && canEdit && (
           <Button size="sm" disabled={busy} onClick={addAccount}>
             <Plus className="size-4" />
             Add Login
@@ -342,9 +325,6 @@ export function App() {
             </DropdownMenuItem>
             {snapshot?.tabUrl?.startsWith("http") && (
               <>
-                <DropdownMenuItem onClick={() => void permission()}>
-                  Enable DevLogin on this site
-                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() =>
                     void act(() =>
@@ -380,6 +360,7 @@ export function App() {
           </DropdownMenuContent>
         </DropdownMenu>
       </header>
+      <SetupChecklist snapshot={snapshot} busy={busy} act={act} />
       {error && (
         <p role="alert" className="border-b px-4 py-2 text-xs text-destructive">
           {error}
@@ -410,7 +391,6 @@ export function App() {
                 busy={busy}
                 act={act}
                 snapshot={snapshot}
-                permission={permission}
               />
               <LocalProject snapshot={snapshot} busy={busy} act={act} />
               {folder && (
@@ -444,7 +424,7 @@ export function App() {
             <>
               <div className="flex items-center justify-between py-4">
                 <h2 className="font-semibold">Projects</h2>
-                {user?.is_admin && (
+                {canEdit && (
                   <Button
                     size="sm"
                     onClick={() => {
@@ -467,7 +447,7 @@ export function App() {
                         {item.description}
                       </p>
                     </div>
-                    {user?.is_admin && (
+                    {canEdit && (
                       <>
                         <Button
                           size="sm"
@@ -529,6 +509,22 @@ export function App() {
           >
             {!user ? "Continue with Google" : "Refresh"}
           </Button>
+          {!user && (
+            <ol className="mt-2 max-w-xs space-y-1 text-left text-xs text-muted-foreground">
+              <li>
+                <strong>1.</strong> Pin DevLogin: click the puzzle-piece icon in
+                your toolbar, then the pin next to DevLogin.
+              </li>
+              <li>
+                <strong>2.</strong> Sign in with Google above, once.
+              </li>
+              <li>
+                <strong>3.</strong> That’s it. DevLogin already works on every
+                website, with no per-site permissions to allow, and offers to
+                save logins as you sign in or sign up.
+              </li>
+            </ol>
+          )}
         </section>
       ) : (
         <div className="vault-panels">
@@ -608,13 +604,6 @@ export function App() {
                               websites[0].url
                             )
                           if (url) {
-                            if (
-                              !(await browser.permissions.request({
-                                origins: [new URL(url).origin + "/*"],
-                              }))
-                            )
-                              throw new Error("Site permission was not granted")
-                            await send({ type: "permissions-changed" })
                             const result = await send<{ message: string }>({
                               type: "open-fill",
                               accountId: account.id,

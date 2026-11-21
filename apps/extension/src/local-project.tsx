@@ -21,7 +21,8 @@ export function LocalProject({
     (snapshot.data ? siteProjects(snapshot.data, snapshot.tabUrl) : []).filter(
       (project) => matchProject([project], snapshot.tabUrl)
     ) ?? []
-  if (!projects.length) return null
+  // A single project on this port is recognised automatically; only ask when ambiguous.
+  if (projects.length < 2 || snapshot.matchedProjectId) return null
   const value = projects.some((project) => project.id === selected)
     ? selected
     : (snapshot.matchedProjectId ?? projects[0]!.id)

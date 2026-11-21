@@ -131,6 +131,8 @@ export type User = {
   avatar_url: string | null
   approved: boolean
   is_admin: boolean
+  can_edit: boolean
+  can_backup: boolean
   created_at: string
   updated_at: string
 }

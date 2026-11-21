@@ -19,18 +19,18 @@ import {
 } from "../src/local-identity"
 import { pageActions } from "../src/page-actions"
 import { readUiSettings, saveUiSettings } from "../src/ui-settings"
-import { registerSites, forbidden } from "../src/site-permissions"
+import { forbidden } from "../src/site-permissions"
 
 export default defineBackground(() => {
   let cache: { data: Sync; at: number } | null = null
   const reservations = new Set<string>()
   const openingLogins = new Set<number>()
-  void registerSites().catch(() => {})
-  browser.permissions.onAdded.addListener(() => {
-    void registerSites().catch(() => {})
-  })
-  browser.permissions.onRemoved.addListener(() => {
-    void registerSites().catch(() => {})
+  // First install: open the welcome page (sign-in and pin instructions).
+  browser.runtime.onInstalled.addListener((details) => {
+    if (details.reason === "install")
+      void browser.tabs.create({
+        url: browser.runtime.getURL("/popup.html#welcome"),
+      })
   })
   // Credentials and session tokens are never available through content-script storage.
   void browser.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" })
@@ -240,9 +240,6 @@ export default defineBackground(() => {
       }
       case "ui-settings":
         return saveUiSettings(message.settings)
-      case "permissions-changed":
-        await registerSites()
-        return null
       case "exclude": {
         pageHandle.clear()
         const { excluded = [] } = await browser.storage.local.get("excluded")
@@ -353,7 +350,8 @@ export default defineBackground(() => {
           data,
           tabUrl: tab?.url ?? "",
           tabId: tab?.id,
-          monitoring: origins.includes("https://*/*"),
+          monitoring:
+            origins.includes("https://*/*") && origins.includes("http://*/*"),
           settings: await readUiSettings(),
           matchedProjectId:
             data && tab?.id && tab.url
@@ -410,7 +408,6 @@ export default defineBackground(() => {
           }))
         )
           throw new Error("Enable DevLogin on the saved website first")
-        await registerSites()
         const tab = await browser.tabs.create({ url })
         if (!tab.id) throw new Error("Could not open website")
         openingLogins.add(tab.id)

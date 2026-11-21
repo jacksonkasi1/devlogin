@@ -3,7 +3,7 @@ import { getCookie, setCookie, deleteCookie } from "hono/cookie"
 import { drizzle } from "drizzle-orm/d1"
 import { and, eq, gt, lt } from "drizzle-orm"
 import { z } from "zod"
-import { users, sessions, oauthStates, exchanges } from "./schema"
+import { users, sessions, oauthStates, exchanges, mcpTokens } from "./schema"
 import { hash, randomToken } from "./crypto"
 import type { User } from "@workspace/shared"
 
@@ -16,7 +16,7 @@ export type AppEnv = {
     CREDENTIAL_KEY: string
     DEV_ORIGIN?: string
   }
-  Variables: { user: User; sessionHash: string }
+  Variables: { user: User; sessionHash: string; viaMcp: boolean }
 }
 const cookie = "devlogin_session"
 const lifetime = 30 * 24 * 60 * 60 * 1000
@@ -33,6 +33,19 @@ export const authenticated: MiddlewareHandler<AppEnv> = async (c, next) => {
     : getCookie(c, cookie)
   if (!token) return c.json({ error: "Sign in to continue" }, 401)
   const tokenHash = await hash(token)
+  if (token.startsWith(mcpPrefix)) {
+    // MCP access tokens act as their owner, so approval and edit rights always apply.
+    const [record] = await database(c.env)
+      .select({ user: users })
+      .from(mcpTokens)
+      .innerJoin(users, eq(mcpTokens.user_id, users.id))
+      .where(eq(mcpTokens.token_hash, tokenHash))
+    if (!record) return c.json({ error: "Invalid MCP token" }, 401)
+    c.set("user", record.user)
+    c.set("sessionHash", tokenHash)
+    c.set("viaMcp", true)
+    return next()
+  }
   const [record] = await database(c.env)
     .select({ user: users })
     .from(sessions)
@@ -47,11 +60,31 @@ export const authenticated: MiddlewareHandler<AppEnv> = async (c, next) => {
     return c.json({ error: "Your session expired. Sign in again." }, 401)
   c.set("user", record.user)
   c.set("sessionHash", tokenHash)
+  c.set("viaMcp", false)
   await next()
 }
 export const approved: MiddlewareHandler<AppEnv> = async (c, next) => {
   if (!c.get("user").approved)
     return c.json({ error: "Waiting for approval" }, 403)
+  await next()
+}
+export const mcpPrefix = "dlm_"
+export const sessionOnly: MiddlewareHandler<AppEnv> = async (c, next) => {
+  if (c.get("viaMcp"))
+    return c.json({ error: "Not available with an MCP token" }, 403)
+  await next()
+}
+// Add, change and remove logins and projects. Admins always can.
+export const editor: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const user = c.get("user")
+  if (!user.is_admin && !user.can_edit)
+    return c.json({ error: "You have view-only access" }, 403)
+  await next()
+}
+export const backup: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const user = c.get("user")
+  if (!user.is_admin && !user.can_backup)
+    return c.json({ error: "Backup access is not enabled for you" }, 403)
   await next()
 }
 export const admin: MiddlewareHandler<AppEnv> = async (c, next) => {
@@ -61,6 +94,12 @@ export const admin: MiddlewareHandler<AppEnv> = async (c, next) => {
 }
 export const safeMutation: MiddlewareHandler<AppEnv> = async (c, next) => {
   if (!["GET", "HEAD", "OPTIONS"].includes(c.req.method)) {
+    // The MCP endpoint is bearer-token only, never cookie-authenticated.
+    if (
+      c.req.path === "/api/mcp" &&
+      !c.req.header("Authorization")?.startsWith("Bearer ")
+    )
+      return c.json({ error: "MCP token required" }, 401)
     if (!c.req.header("Authorization")?.startsWith("Bearer ")) {
       const origin = c.req.header("Origin")
       if (

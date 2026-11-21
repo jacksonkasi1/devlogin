@@ -8,7 +8,8 @@ import type { UiSettings } from "../src/ui-settings"
 import { inpage } from "../src/inpage"
 
 export default defineContentScript({
-  registration: "runtime",
+  matches: ["https://*/*", "http://*/*"],
+  registration: "manifest",
   runAt: "document_idle",
   main(ctx) {
     if (window.top !== window || document.querySelector("devlogin-ui")) return

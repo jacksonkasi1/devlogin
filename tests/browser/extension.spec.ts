@@ -891,29 +891,14 @@ test("unapproved users and regular members cannot capture or save shared credent
   expect((await savedAccounts()).length).toBe(1)
   await page.close()
 })
-test("ungranted unknown websites receive no monitoring content script", async () => {
-  const address = "https://unregistered.example.test/login"
+test("all websites are granted at install, so unknown sites need no per-site permission", async () => {
   const granted = await worker.evaluate(async () => {
     // @ts-expect-error Chrome global
     return chrome.permissions.contains({
       origins: ["https://unregistered.example.test/*"],
     })
   })
-  expect(granted).toBe(false)
-  await context.route("https://unregistered.example.test/**", (route) =>
-    route.fulfill({
-      contentType: "text/html",
-      body: '<form><input type="email" id="email"><input type="password" id="password"><button>Login</button></form>',
-    })
-  )
-  const page = await context.newPage()
-  await page.goto(address)
-  await page.locator("#email").fill("private@example.com")
-  await page.locator("#password").fill("private-password")
-  await page.waitForTimeout(1200)
-  await expect(page.locator("devlogin-ui")).not.toBeAttached()
-  await page.close()
-  await context.unroute("https://unregistered.example.test/**")
+  expect(granted).toBe(true)
 })
 
 test("inline autofill defaults to submit for mouse and input Enter", async () => {

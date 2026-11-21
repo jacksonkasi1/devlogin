@@ -29,7 +29,6 @@ export function CurrentWebsite({
   act,
   savePreference,
   openProject,
-  permission,
   accountList,
   currentOrigin,
   setEditingProject,
@@ -47,7 +46,6 @@ export function CurrentWebsite({
     update: Partial<Preference>
   ) => Promise<unknown>
   openProject: (item: Project) => void
-  permission: (wide?: boolean) => Promise<void>
   accountList: (item: Project) => ReactNode
   currentOrigin: string
   setEditingProject: (item: Project | undefined) => void
@@ -130,13 +128,6 @@ export function CurrentWebsite({
           </Button>
         </CardContent>
       </Card>
-      <Button
-        variant="outline"
-        className="w-full"
-        onClick={() => void permission()}
-      >
-        Enable DevLogin on this site
-      </Button>
       {accountList(detected)}
     </>
   ) : (
@@ -149,16 +140,7 @@ export function CurrentWebsite({
       </CardHeader>
       <CardContent className="space-y-2">
         <Badge variant="outline">Unregistered</Badge>
-        {currentOrigin && (
-          <Button
-            className="w-full"
-            variant="outline"
-            onClick={() => void permission()}
-          >
-            Enable DevLogin on this site
-          </Button>
-        )}
-        {user.is_admin && currentOrigin && (
+        {(user.is_admin || user.can_edit) && currentOrigin && (
           <Button
             className="w-full"
             onClick={() => {

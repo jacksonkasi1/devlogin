@@ -36,6 +36,15 @@ export function pageActions(deps: {
   }
   setInterval(prune, 15_000)
   browser.tabs.onRemoved.addListener((id) => candidates.delete(id))
+  // Content scripts now run on every tab; cache the profile so tabs do not each poll it.
+  let meCache: { at: number; value: Me } | null = null
+  type Me = { is_admin: boolean; can_edit: boolean; approved: boolean }
+  async function profile() {
+    if (meCache && Date.now() - meCache.at < 60_000) return meCache.value
+    const value = await deps.api<Me>("/api/me")
+    meCache = { at: Date.now(), value }
+    return value
+  }
   async function page(
     sender: Browser.runtime.MessageSender
   ): Promise<PageContext> {
@@ -58,11 +67,10 @@ export function pageActions(deps: {
       sender.tab.id
     )
     const project = matched.project ?? null
-    const me = await deps.api<{ is_admin: boolean; approved: boolean }>(
-      "/api/me"
-    )
+    const me = await profile()
     if (!me.approved) {
       candidates.delete(sender.tab.id)
+      meCache = null
       deps.invalidate()
       throw new Error("Administrator approval is required")
     }
@@ -76,7 +84,7 @@ export function pageActions(deps: {
               accountMatches(a, sender.url!)
           )
         : [],
-      admin: me.is_admin,
+      admin: me.is_admin || me.can_edit,
     }
   }
   async function instruction(
@@ -272,6 +280,7 @@ export function pageActions(deps: {
   return {
     handle,
     clear() {
+      meCache = null
       candidates.clear()
     },
   }

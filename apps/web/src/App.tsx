@@ -39,6 +39,7 @@ import {
   Users,
   LogOut,
   RefreshCw,
+  Bot,
 } from "lucide-react"
 import { Input } from "@workspace/ui/components/input"
 import {
@@ -56,6 +57,9 @@ import {
 } from "@workspace/ui/components/dropdown-menu"
 import { useTheme } from "./components/theme-provider"
 import { ThemeToggle } from "./components/theme-toggle"
+import { McpPage } from "./components/mcp-page"
+import { BackupPanel } from "./components/backup-panel"
+import { Switch } from "@workspace/ui/components/switch"
 
 const api = <T,>(path: string, options?: RequestInit) =>
   apiRequest<T>("", path, options)
@@ -76,6 +80,7 @@ export function App() {
     "projects" | "accounts" | "details"
   >("projects")
   const { theme, setTheme } = useTheme()
+  const canEdit = !!user && (user.is_admin || user.can_edit)
   const refresh = useCallback(async () => {
     try {
       const me = await api<User>("/api/me")
@@ -150,11 +155,7 @@ export function App() {
     }
   }
   async function moveLogin(account: Account, project: Project) {
-    if (
-      !user?.is_admin ||
-      moveInFlight.current ||
-      account.project_id === project.id
-    )
+    if (!canEdit || moveInFlight.current || account.project_id === project.id)
       return
     moveInFlight.current = true
     setMoving(true)
@@ -196,14 +197,19 @@ export function App() {
       setLoading(false)
     }
   }
-  async function updateUser(id: string, approved: boolean) {
+  async function updateUser(
+    id: string,
+    changes: Partial<
+      Pick<User, "approved" | "is_admin" | "can_edit" | "can_backup">
+    >
+  ) {
     setLoading(true)
     try {
       await api(`/api/users/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ approved }),
+        body: JSON.stringify(changes),
       })
-      toast.success(approved ? "User approved" : "Access disabled")
+      toast.success("Access updated")
       await refresh()
     } catch (failure) {
       toast.error(failure instanceof Error ? failure.message : "Update failed")
@@ -313,7 +319,7 @@ export function App() {
           </div>
           <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />
-            {user.is_admin && (
+            {canEdit && (
               <Button
                 className="rounded-md"
                 disabled={!data || loading}
@@ -363,6 +369,10 @@ export function App() {
                     Users
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuItem onClick={() => setTab("mcp")}>
+                  <Bot />
+                  MCP
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setTab("settings")}>
                   <Settings />
                   Settings
@@ -406,7 +416,7 @@ export function App() {
               data={data}
               selected={selected}
               setSelected={setSelected}
-              admin={user.is_admin}
+              admin={canEdit}
               setEditor={setEditor}
               search={search}
               accountId={accountId}
@@ -435,6 +445,7 @@ export function App() {
                   <TableRow>
                     <TableHead>User</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Access</TableHead>
                     <TableHead>Action</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -459,12 +470,50 @@ export function App() {
                         </Badge>
                       </TableCell>
                       <TableCell>
+                        {item.approved && (
+                          <div className="space-y-1 text-xs">
+                            {(
+                              [
+                                ["can_edit", "Can edit"],
+                                ["can_backup", "Backup"],
+                                ["is_admin", "Admin"],
+                              ] as const
+                            ).map(([key, label]) => (
+                              <label
+                                key={key}
+                                className="flex items-center gap-2"
+                              >
+                                <Switch
+                                  size="sm"
+                                  aria-label={`${label} ${item.email}`}
+                                  checked={
+                                    item[key] ||
+                                    (key !== "is_admin" && item.is_admin)
+                                  }
+                                  disabled={
+                                    loading ||
+                                    (key !== "is_admin" && item.is_admin) ||
+                                    (key === "is_admin" && item.id === user.id)
+                                  }
+                                  onCheckedChange={(value) =>
+                                    void updateUser(item.id, { [key]: value })
+                                  }
+                                />
+                                {label}
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
                         {item.id !== user.id && (
                           <div className="flex gap-2">
                             {!item.approved && (
                               <Button
                                 disabled={loading}
-                                onClick={() => void updateUser(item.id, true)}
+                                onClick={() =>
+                                  void updateUser(item.id, { approved: true })
+                                }
                               >
                                 Approve
                               </Button>
@@ -472,7 +521,9 @@ export function App() {
                             <Button
                               disabled={loading}
                               variant="outline"
-                              onClick={() => void updateUser(item.id, false)}
+                              onClick={() =>
+                                void updateUser(item.id, { approved: false })
+                              }
                             >
                               {item.approved ? "Disable" : "Reject"}
                             </Button>
@@ -485,6 +536,9 @@ export function App() {
               </Table>
             </TabsContent>
           )}
+          <TabsContent value="mcp" className="min-h-0 overflow-auto p-4 md:p-8">
+            <McpPage user={user} />
+          </TabsContent>
           <TabsContent
             value="settings"
             className="min-h-0 overflow-auto p-4 md:p-8"
@@ -521,9 +575,12 @@ export function App() {
                 </Button>
               </CardContent>
             </Card>
+            <div className="mt-4">
+              <BackupPanel user={user} onImported={reload} />
+            </div>
           </TabsContent>
         </Tabs>
-        {user.is_admin && (
+        {canEdit && (
           <ManagementDialogs
             editor={editor}
             setEditor={setEditor}
