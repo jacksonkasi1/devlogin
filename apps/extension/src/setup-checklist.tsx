@@ -4,16 +4,16 @@ import type { Snapshot } from "./messages"
 import { send } from "./client"
 import { Button } from "@workspace/ui/components/button"
 
-// Shown only while something is incomplete, and disappears once everything is done.
-export function SetupChecklist({
-  snapshot,
-  busy,
-  act,
-}: {
-  snapshot: Snapshot | null
-  busy: boolean
+export type Step = {
+  done: boolean
+  label: string
+  action?: string
+  run?: () => Promise<void>
+}
+export function useSetupSteps(
+  snapshot: Snapshot | null,
   act: (action: () => Promise<unknown>, success?: string) => Promise<void>
-}) {
+): Step[] {
   const [pinned, setPinned] = useState<boolean | null>(null)
   useEffect(() => {
     browser.action
@@ -21,16 +21,15 @@ export function SetupChecklist({
       .then((settings) => setPinned(settings.isOnToolbar))
       .catch(() => setPinned(true))
   }, [])
-  if (!snapshot) return null
-  const steps = [
+  return [
     {
-      done: !!snapshot.user,
+      done: !!snapshot?.user,
       label: "Sign in with Google",
       action: "Sign in",
       run: () => act(() => send({ type: "login" })),
     },
     {
-      done: !!snapshot.monitoring,
+      done: !!snapshot?.monitoring,
       label: "Allow DevLogin on all websites",
       action: "Allow",
       run: () =>
@@ -46,9 +45,23 @@ export function SetupChecklist({
     },
     {
       done: pinned !== false,
-      label: "Pin DevLogin: puzzle icon in the toolbar, then the pin",
+      label: "Pin DevLogin to your toolbar",
     },
   ]
+}
+
+// Shown only while something is incomplete, and disappears once everything is done.
+export function SetupChecklist({
+  snapshot,
+  busy,
+  act,
+}: {
+  snapshot: Snapshot | null
+  busy: boolean
+  act: (action: () => Promise<unknown>, success?: string) => Promise<void>
+}) {
+  const steps = useSetupSteps(snapshot, act)
+  if (!snapshot) return null
   if (steps.every((step) => step.done)) return null
   return (
     <section
@@ -68,7 +81,7 @@ export function SetupChecklist({
             {step.label}
           </span>
           {!step.done && step.run && (
-            <Button size="sm" disabled={busy} onClick={() => void step.run()}>
+            <Button size="sm" disabled={busy} onClick={() => void step.run?.()}>
               {step.action}
             </Button>
           )}

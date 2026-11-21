@@ -44,6 +44,7 @@ import {
 import { PopupSettings } from "../../src/popup-settings"
 import { LocalProject } from "../../src/local-project"
 import { SetupChecklist } from "../../src/setup-checklist"
+import { Onboarding } from "../../src/onboarding"
 import { send } from "../../src/client"
 import type { Snapshot } from "../../src/messages"
 
@@ -237,7 +238,7 @@ export function App() {
   )
   return (
     <main className="popup-shell">
-      <header className="popup-header">
+      <header className={`popup-header ${snapshot && !user ? "hidden" : ""}`}>
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -360,7 +361,7 @@ export function App() {
           </DropdownMenuContent>
         </DropdownMenu>
       </header>
-      <SetupChecklist snapshot={snapshot} busy={busy} act={act} />
+      {user && <SetupChecklist snapshot={snapshot} busy={busy} act={act} />}
       {error && (
         <p role="alert" className="border-b px-4 py-2 text-xs text-destructive">
           {error}
@@ -485,47 +486,26 @@ export function App() {
           )}
         </section>
       ) : !user?.approved || !data ? (
-        <section className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-          <KeyRound className="size-8 text-muted-foreground" />
-          <h1 className="text-lg font-semibold">
-            {!user
-              ? "Welcome to DevLogin"
-              : !user.approved
+        !user ? (
+          <Onboarding snapshot={snapshot} busy={busy} act={act} />
+        ) : (
+          <section className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+            <KeyRound className="size-8 text-muted-foreground" />
+            <h1 className="text-lg font-semibold">
+              {!user.approved
                 ? "Waiting for approval"
                 : "Connect to your logins"}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {!user
-              ? "Sign in with Google to sync your saved logins."
-              : !user.approved
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {!user.approved
                 ? `${user.email} requires administrator approval.`
                 : "Refresh to sync your accounts."}
-          </p>
-          <Button
-            disabled={busy}
-            onClick={() =>
-              !user ? void act(() => send({ type: "login" })) : void refresh()
-            }
-          >
-            {!user ? "Continue with Google" : "Refresh"}
-          </Button>
-          {!user && (
-            <ol className="mt-2 max-w-xs space-y-1 text-left text-xs text-muted-foreground">
-              <li>
-                <strong>1.</strong> Pin DevLogin: click the puzzle-piece icon in
-                your toolbar, then the pin next to DevLogin.
-              </li>
-              <li>
-                <strong>2.</strong> Sign in with Google above, once.
-              </li>
-              <li>
-                <strong>3.</strong> That’s it. DevLogin already works on every
-                website, with no per-site permissions to allow, and offers to
-                save logins as you sign in or sign up.
-              </li>
-            </ol>
-          )}
-        </section>
+            </p>
+            <Button disabled={busy} onClick={() => void refresh()}>
+              Refresh
+            </Button>
+          </section>
+        )
       ) : (
         <div className="vault-panels">
           <aside className="login-sidebar">
