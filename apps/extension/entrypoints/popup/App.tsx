@@ -1,15 +1,24 @@
+import { configureIconBackend } from "@workspace/shared"
+import { groupsFor, orderLogins, type SortOrder } from "@workspace/shared"
+import {
+  OrganizationMenu,
+  LoginActivity,
+} from "@workspace/ui/components/organization"
+import { openTools } from "../../src/tools-window"
+import { ItemMenu } from "@workspace/ui/components/item-menu"
+import { refreshWebsiteIcons, type RefreshPage } from "@workspace/shared"
 import { useEffect, useRef, useState } from "react"
 import { browser } from "wxt/browser"
 import {
   accountMatches,
   accountWebsites,
   websiteMatches,
-  loginUrl,
   type Account,
   type Project,
 } from "@workspace/shared"
 import { Button } from "@workspace/ui/components/button"
-import { Input } from "@workspace/ui/components/input"
+import { AppearanceToggle } from "@workspace/ui/components/appearance-toggle"
+import { ScrollArea } from "@workspace/ui/components/scroll-area"
 import {
   Dialog,
   DialogContent,
@@ -26,34 +35,52 @@ import {
 } from "@workspace/ui/components/dropdown-menu"
 import { Toaster, toast } from "@workspace/ui/components/sonner"
 import { ItemIcon } from "@workspace/ui/components/item-icon"
-import {
-  ProjectEditor,
-  AccountEditor,
-} from "@workspace/ui/components/credential-editors"
+import { ProjectEditor } from "@workspace/ui/components/credential-editors"
 import {
   KeyRound,
   Plus,
   MoreHorizontal,
-  Search,
   ChevronDown,
-  Copy,
   Eye,
   EyeOff,
   ArrowLeft,
 } from "@workspace/ui/components/devlogin-icons"
+import {
+  CredentialRow,
+  LoginActions,
+  LoginHeading,
+  LoginRow,
+  VaultMark,
+  VaultSearch,
+  copyCredential,
+} from "@workspace/ui/components/vault"
 import { PopupSettings } from "../../src/popup-settings"
 import { LocalProject } from "../../src/local-project"
+import { openSetup, SetupChecklist } from "../../src/setup-checklist"
+import { Onboarding } from "../../src/onboarding"
+import { useExtensionTheme } from "../../src/extension-theme"
+import {
+  openLoginWindow,
+  savedLoginKey,
+  type SavedLogin,
+} from "../../src/login-window"
 import { send } from "../../src/client"
 import type { Snapshot } from "../../src/messages"
 
+const orgRequest = <T,>(path: string, method = "GET", body?: unknown) =>
+  send<T>({ type: "api", path, method, body })
 export function App() {
+  const [group, setGroup] = useState("")
+  const [sort, setSort] = useState<SortOrder>(
+    () => (localStorage.getItem("login-sort") as SortOrder) ?? "priority"
+  )
+
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   const [projectId, setProjectId] = useState("all")
   const [selected, setSelected] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [view, setView] = useState("logins")
-  const [editor, setEditor] = useState<"account" | "project" | null>(null)
-  const [editingAccount, setEditingAccount] = useState<Account>()
+  const [editor, setEditor] = useState<"project" | null>(null)
   const [editingProject, setEditingProject] = useState<Project>()
   const [deleting, setDeleting] = useState<{
     title: string
@@ -77,6 +104,7 @@ export function App() {
     setBusy(true)
     try {
       const next = await send<Snapshot>({ type: "snapshot" })
+      configureIconBackend(next.origin)
       setSnapshot(next)
       setTheme(next.settings.theme)
       setOrigin(next.origin)
@@ -106,27 +134,53 @@ export function App() {
   useEffect(() => {
     void refresh()
   }, [])
+  useExtensionTheme(theme)
   useEffect(() => {
-    const media = matchMedia("(prefers-color-scheme: dark)")
-    const apply = () =>
-      document.documentElement.classList.toggle(
-        "dark",
-        theme === "dark" || (theme === "system" && media.matches)
-      )
     localStorage.setItem("theme", theme)
-    apply()
-    media.addEventListener("change", apply)
-    return () => media.removeEventListener("change", apply)
   }, [theme])
+  useEffect(() => {
+    const showSaved = (saved: SavedLogin | undefined) => {
+      if (!saved) return
+      setProjectId(saved.project_id)
+      setSelected(saved.id)
+      setSearch("")
+      void browser.storage.session.remove(savedLoginKey).catch(() => {})
+    }
+    const onChange = (
+      changes: Record<string, { newValue?: unknown }>,
+      area: string
+    ) => {
+      if (area !== "session" || !changes[savedLoginKey]?.newValue) return
+      showSaved(changes[savedLoginKey].newValue as SavedLogin)
+      void refresh()
+    }
+    browser.storage.onChanged.addListener(onChange)
+    void browser.storage.session
+      .get(savedLoginKey)
+      .then((stored) => {
+        showSaved(stored[savedLoginKey] as SavedLogin | undefined)
+      })
+      .catch(() => {})
+    return () => browser.storage.onChanged.removeListener(onChange)
+  }, [])
   const data = snapshot?.data
   const user = snapshot?.user
+  const canEdit = !!user && (user.is_admin || user.can_edit)
   const projects = data?.projects ?? []
   const project = projects.find((item) => item.id === projectId)
-  const accounts = (data?.accounts ?? []).filter((item) => {
+  const filtered = (data?.accounts ?? []).filter((item) => {
     const folder = projects.find((p) => p.id === item.project_id)
     return (
+      (!group ||
+        groupsFor(item, folder, data?.collections).some(
+          (g) => g.id === group
+        )) &&
       (projectId === "all" || item.project_id === projectId) &&
-      `${item.label} ${item.email} ${folder?.name ?? ""} ${accountWebsites(
+      `${groupsFor(item, folder, data?.collections)
+        .map((g) => g.name)
+        .join(
+          " "
+        )} ${item.label} ${item.email} ${(item.tags ?? []).join(" ")} ${(folder?.tags ?? []).join(" ")} ${folder?.name ?? ""} ${accountWebsites(
         item,
         folder
       )
@@ -135,6 +189,21 @@ export function App() {
         .toLowerCase()
         .includes(search.toLowerCase())
     )
+  })
+  const accounts = orderLogins(filtered, sort, (a) => {
+    const folder = projects.find((p) => p.id === a.project_id)
+    const sites = accountWebsites(a, folder).filter(
+      (s) => snapshot?.tabUrl && websiteMatches(s, snapshot.tabUrl)
+    )
+    return sites.length
+      ? 1000 +
+          Math.max(...sites.map((s) => new URL(s.url).pathname.length)) +
+          ((snapshot?.pageTitle ?? "")
+            .toLowerCase()
+            .includes(a.label.toLowerCase())
+            ? 20
+            : 0)
+      : 0
   })
   const account =
     accounts.find((item) => item.id === selected) ??
@@ -154,14 +223,6 @@ export function App() {
     const timer = setTimeout(() => setRevealed(null), 30000)
     return () => clearTimeout(timer)
   }, [password])
-  const copy = async (value: string, title: string) => {
-    try {
-      await navigator.clipboard.writeText(value)
-      toast.success(`${title} copied`)
-    } catch {
-      toast.error("Clipboard unavailable")
-    }
-  }
   const readPassword = async (copyValue = false) => {
     if (!account) return
     try {
@@ -170,7 +231,7 @@ export function App() {
         "POST",
         {}
       )
-      if (copyValue) await copy(result.password, "Password")
+      if (copyValue) await copyCredential(result.password, "Password")
       else if (visibleAccount.current === account.id)
         setRevealed({ id: account.id, value: result.password })
     } catch (failure) {
@@ -181,80 +242,86 @@ export function App() {
       )
     }
   }
-  async function permission(wide = false) {
-    try {
-      if (
-        !(await browser.permissions.request({
-          origins: wide
-            ? ["https://*/*", "http://*/*"]
-            : [new URL(snapshot?.tabUrl ?? "").origin + "/*"],
-        }))
-      )
-        throw new Error("Site permission was not granted")
-      await send({ type: "permissions-changed" })
-      await refresh()
-      toast.success("DevLogin enabled")
-    } catch (failure) {
-      toast.error(
-        failure instanceof Error ? failure.message : "Could not enable site"
-      )
-    }
-  }
   const addAccount = () => {
-    setEditingAccount(undefined)
     if (!projects.length) {
       setEditingProject(undefined)
       setEditor("project")
-    } else setEditor("account")
+    } else {
+      void openLoginWindow({
+        projectId: project?.id ?? snapshot?.matchedProjectId ?? projects[0]?.id,
+        tabId: snapshot?.tabId,
+      }).catch((failure) => toast.error(failure.message))
+    }
+  }
+  const fillLogin = (item: Account) => {
+    const project = projects.find((entry) => entry.id === item.project_id)
+    const sites = accountWebsites(item, project)
+    if (!project || !sites.length) return
+    const type = sites.some((site) =>
+      websiteMatches(site, snapshot?.tabUrl ?? "")
+    )
+      ? "manual"
+      : "open-fill"
+    void act(async () => {
+      const result = await send<{ message: string }>({
+        type,
+        accountId: item.id,
+        submit: snapshot?.settings.submitAfterFill ?? false,
+      })
+      toast.success(result.message)
+    })
+  }
+  function refetchIcons(id?: string) {
+    void act(async () => {
+      const message = await refreshWebsiteIcons(
+        (body) =>
+          send<RefreshPage>({
+            type: "api",
+            path: "/api/favicons/refresh",
+            method: "POST",
+            body,
+          }),
+        id
+      )
+      toast.success(message)
+    })
   }
   const accountMenu = account && (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button variant="ghost" size="icon" aria-label="Login actions" />
-        }
-      >
-        <MoreHorizontal />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => void copy(account.email, "Username")}>
-          Copy username
-        </DropdownMenuItem>
-        {account.login_type === "password" && (
-          <DropdownMenuItem onClick={() => void readPassword(true)}>
-            Copy password
-          </DropdownMenuItem>
-        )}
-        {user?.is_admin && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => {
-                setEditingAccount(account)
-                setEditor("account")
-              }}
-            >
-              Edit login
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              variant="destructive"
-              onClick={() =>
-                setDeleting({
-                  title: `Delete ${account.label}?`,
-                  path: `/api/accounts/${account.id}`,
-                })
-              }
-            >
-              Delete login
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <LoginActions
+      onRefreshIcon={
+        canEdit && !account.icon ? () => refetchIcons(account.id) : undefined
+      }
+      onCopyUsername={() => void copyCredential(account.email, "Username")}
+      onCopyPassword={
+        account.login_type === "password"
+          ? () => void readPassword(true)
+          : undefined
+      }
+      onEdit={
+        canEdit
+          ? () => {
+              void openLoginWindow({ accountId: account.id }).catch((failure) =>
+                toast.error(failure.message)
+              )
+            }
+          : undefined
+      }
+      onDelete={
+        canEdit
+          ? () =>
+              setDeleting({
+                title: `Delete ${account.label}?`,
+                path: `/api/accounts/${account.id}`,
+              })
+          : undefined
+      }
+    />
   )
   return (
     <main className="popup-shell">
-      <header className="popup-header">
+      <header
+        className={`popup-header vault-header ${snapshot && !user ? "hidden" : ""}`}
+      >
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -265,7 +332,7 @@ export function App() {
               />
             }
           >
-            <KeyRound className="size-4 text-primary" />
+            <VaultMark />
             <span className="truncate">{project?.name ?? "All Projects"}</span>
             <ChevronDown className="ml-auto size-3" />
           </DropdownMenuTrigger>
@@ -297,35 +364,85 @@ export function App() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <div className="relative min-w-0 flex-1">
-          <Search className="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground" />
-          <Input
-            className="h-9 pl-9"
-            placeholder="Search logins…"
-            aria-label="Search logins"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
+        <VaultSearch
+          autoFocus
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <AppearanceToggle
+          disabled={busy || !snapshot}
+          onChange={(theme) =>
+            void act(() => send({ type: "ui-settings", settings: { theme } }))
+          }
+        />
+        {user?.approved && (
+          <ItemMenu
+            compact
+            onLogin={canEdit ? addAccount : undefined}
+            onCategory={(kind) =>
+              void openTools(kind, snapshot?.tabId, snapshot?.tabUrl)
+            }
           />
-        </div>
-        {user?.approved && user.is_admin && (
-          <Button size="sm" disabled={busy} onClick={addAccount}>
-            <Plus className="size-4" />
-            Add Login
-          </Button>
         )}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button variant="ghost" size="icon" aria-label="Settings menu" />
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Settings menu"
+              />
             }
           >
             <MoreHorizontal />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-60">
             <div className="truncate px-2 py-2 text-xs text-muted-foreground">
-              {user?.email ?? "DevLogin"}
+              {user?.email ?? "Global Login"}
             </div>
             <DropdownMenuSeparator />
+            {user?.approved && (
+              <>
+                <DropdownMenuItem onClick={() => void openTools("generator")}>
+                  Tools · Password generator
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() =>
+                    void openTools("browse", snapshot?.tabId, snapshot?.tabUrl)
+                  }
+                >
+                  My private vault
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() =>
+                    void browser.tabs.create({ url: origin + "/#files" })
+                  }
+                >
+                  File attachments
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() =>
+                    void browser.tabs.create({
+                      url: "https://10minutemail.com/",
+                    })
+                  }
+                >
+                  Temporary inbox ↗
+                </DropdownMenuItem>
+              </>
+            )}
+            <DropdownMenuItem
+              onClick={() =>
+                void browser.tabs.create({
+                  url: new URL("/releases.html", origin).href,
+                })
+              }
+            >
+              What’s new
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => void act(openSetup)}>
+              Extension setup
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setView("settings")}>
               Settings
             </DropdownMenuItem>
@@ -337,14 +454,16 @@ export function App() {
             >
               Open Web Dashboard
             </DropdownMenuItem>
+            {canEdit && (
+              <DropdownMenuItem disabled={busy} onClick={() => refetchIcons()}>
+                Refetch all favicons
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem disabled={busy} onClick={() => void refresh()}>
               Refresh
             </DropdownMenuItem>
             {snapshot?.tabUrl?.startsWith("http") && (
               <>
-                <DropdownMenuItem onClick={() => void permission()}>
-                  Enable DevLogin on this site
-                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() =>
                     void act(() =>
@@ -380,6 +499,7 @@ export function App() {
           </DropdownMenuContent>
         </DropdownMenu>
       </header>
+      {user && <SetupChecklist snapshot={snapshot} busy={busy} act={act} />}
       {error && (
         <p role="alert" className="border-b px-4 py-2 text-xs text-destructive">
           {error}
@@ -410,7 +530,6 @@ export function App() {
                 busy={busy}
                 act={act}
                 snapshot={snapshot}
-                permission={permission}
               />
               <LocalProject snapshot={snapshot} busy={busy} act={act} />
               {folder && (
@@ -444,7 +563,7 @@ export function App() {
             <>
               <div className="flex items-center justify-between py-4">
                 <h2 className="font-semibold">Projects</h2>
-                {user?.is_admin && (
+                {canEdit && (
                   <Button
                     size="sm"
                     onClick={() => {
@@ -467,7 +586,7 @@ export function App() {
                         {item.description}
                       </p>
                     </div>
-                    {user?.is_admin && (
+                    {canEdit && (
                       <>
                         <Button
                           size="sm"
@@ -505,83 +624,95 @@ export function App() {
           )}
         </section>
       ) : !user?.approved || !data ? (
-        <section className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-          <KeyRound className="size-8 text-muted-foreground" />
-          <h1 className="text-lg font-semibold">
-            {!user
-              ? "Welcome to DevLogin"
-              : !user.approved
+        !user ? (
+          <Onboarding busy={busy} act={act} />
+        ) : (
+          <section className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+            <KeyRound className="size-8 text-muted-foreground" />
+            <h1 className="text-lg font-semibold">
+              {!user.approved
                 ? "Waiting for approval"
                 : "Connect to your logins"}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {!user
-              ? "Sign in with Google to sync your saved logins."
-              : !user.approved
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {!user.approved
                 ? `${user.email} requires administrator approval.`
                 : "Refresh to sync your accounts."}
-          </p>
-          <Button
-            disabled={busy}
-            onClick={() =>
-              !user ? void act(() => send({ type: "login" })) : void refresh()
-            }
-          >
-            {!user ? "Continue with Google" : "Refresh"}
-          </Button>
-        </section>
+            </p>
+            <Button disabled={busy} onClick={() => void refresh()}>
+              Refresh
+            </Button>
+          </section>
+        )
       ) : (
         <div className="vault-panels">
           <aside className="login-sidebar">
-            <div className="flex items-center justify-between border-b px-4 py-3 text-xs">
+            <div className="vault-pane-bar flex items-center justify-between px-4 text-xs">
               <span className="font-medium">
-                {project?.name ?? "All Logins"}
+                {data?.collections?.find((g) => g.id === group)?.name ??
+                  project?.name ??
+                  "All Logins"}
               </span>
+              <OrganizationMenu
+                sort={sort}
+                onSort={(value) => {
+                  setSort(value)
+                  localStorage.setItem("login-sort", value)
+                }}
+                groups={data?.collections ?? []}
+                group={group}
+                change={setGroup}
+                request={orgRequest}
+                editable={canEdit}
+                refresh={refresh}
+              />
               <span className="text-muted-foreground">{accounts.length}</span>
             </div>
-            <div className="login-scroll p-2">
-              {accounts.map((item) => (
-                <button
-                  key={item.id}
-                  aria-pressed={account?.id === item.id}
-                  className={`login-row ${account?.id === item.id ? "selected" : ""}`}
-                  onClick={() => setSelected(item.id)}
-                >
-                  <ItemIcon
-                    icon={
-                      item.icon ??
-                      projects.find((p) => p.id === item.project_id)?.icon
-                    }
-                    website={
-                      accountWebsites(
-                        item,
-                        projects.find((p) => p.id === item.project_id)
-                      )[0]?.url
-                    }
-                  />
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium">
-                      {item.label}
-                    </span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {item.email}
-                    </span>
-                  </span>
-                </button>
-              ))}
-              {!accounts.length && (
-                <div className="px-3 py-8 text-center text-xs text-muted-foreground">
-                  {search
-                    ? "No logins match your search."
-                    : "No saved logins yet."}
-                </div>
-              )}
-            </div>
+            <ScrollArea className="login-scroll min-h-0 flex-1">
+              <div className="p-2">
+                {accounts.map((item) => {
+                  const project = projects.find((p) => p.id === item.project_id)
+                  const website = accountWebsites(item, project)[0]?.url
+                  return (
+                    <LoginRow
+                      key={item.id}
+                      name={item.label}
+                      username={item.email}
+                      icon={item.icon ?? project?.icon}
+                      website={website}
+                      favicon={item.favicon}
+                      action={
+                        website && (
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            aria-label={`Open & Fill ${item.label} (${item.email})`}
+                            disabled={busy}
+                            onClick={() => fillLogin(item)}
+                          >
+                            Open &amp; Fill
+                          </Button>
+                        )
+                      }
+                      aria-pressed={account?.id === item.id}
+                      onClick={() => setSelected(item.id)}
+                    />
+                  )
+                })}
+                {!accounts.length && (
+                  <div className="px-3 py-8 text-center text-xs text-muted-foreground">
+                    {search
+                      ? "No logins match your search."
+                      : "No saved logins yet."}
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
           </aside>
           <section className="login-details">
             {account ? (
               <>
-                <div className="detail-toolbar">
+                <div className="vault-pane-bar detail-toolbar">
                   <span className="flex min-w-0 flex-1 items-center gap-2 truncate text-xs text-muted-foreground">
                     <ItemIcon icon={folder?.icon} folder small />
                     {folder?.name}
@@ -589,150 +720,106 @@ export function App() {
                   <Button
                     size="sm"
                     variant="outline"
+                    className="fill-action"
                     disabled={busy || !websites.length}
-                    onClick={() =>
-                      void act(async () => {
-                        if (
-                          !websites.some((site) =>
-                            websiteMatches(site, snapshot?.tabUrl ?? "")
-                          )
-                        ) {
-                          const url =
-                            websites[0] &&
-                            loginUrl(
-                              {
-                                ...folder!,
-                                urls: websites.map((s) => s.url),
-                                login_path: websites[0].login_path ?? "",
-                              },
-                              websites[0].url
-                            )
-                          if (url) {
-                            if (
-                              !(await browser.permissions.request({
-                                origins: [new URL(url).origin + "/*"],
-                              }))
-                            )
-                              throw new Error("Site permission was not granted")
-                            await send({ type: "permissions-changed" })
-                            const result = await send<{ message: string }>({
-                              type: "open-fill",
-                              accountId: account.id,
-                              submit:
-                                snapshot?.settings.submitAfterFill ?? false,
-                            })
-                            toast.success(result.message)
-                          }
-                        } else {
-                          const result = await send<{ message: string }>({
-                            type: "manual",
-                            accountId: account.id,
-                            submit: snapshot?.settings.submitAfterFill ?? false,
-                          })
-                          toast.success(result.message)
-                        }
-                      })
-                    }
+                    onClick={() => fillLogin(account)}
                   >
                     Open &amp; Fill
                   </Button>
                   {accountMenu}
                 </div>
-                <div className="detail-scroll p-6">
-                  <div className="mb-6 flex items-center gap-3">
-                    <ItemIcon
+                <ScrollArea className="detail-scroll min-h-0 flex-1">
+                  <div className="vault-detail">
+                    <LoginHeading
+                      title={account.label}
                       icon={account.icon}
                       website={websites[0]?.url}
-                      large
+                      favicon={account.favicon}
                     />
-                    <h1 className="min-w-0 text-xl font-semibold break-words">
-                      {account.label}
-                    </h1>
-                  </div>
-                  <div className="overflow-hidden rounded-lg border">
-                    <div className="credential-field">
-                      <div className="min-w-0 flex-1">
-                        <p className="field-label">Username</p>
-                        <p className="text-sm break-all">{account.email}</p>
-                      </div>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        aria-label="Copy username"
-                        onClick={() => void copy(account.email, "Username")}
-                      >
-                        <Copy className="size-4" />
-                      </Button>
-                    </div>
-                    <div className="credential-field border-t">
-                      <div className="min-w-0 flex-1">
-                        <p className="field-label">Password</p>
-                        <p className="font-mono text-sm break-all">
-                          {account.login_type === "google"
-                            ? "Google sign-in"
-                            : (password ?? "••••••••••••")}
-                        </p>
-                      </div>
-                      {account.login_type === "password" && (
-                        <>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            aria-label={
-                              password === null
-                                ? "Show password"
-                                : "Hide password"
-                            }
-                            onClick={() =>
-                              password === null
-                                ? void readPassword()
-                                : setRevealed(null)
-                            }
-                          >
-                            {password === null ? (
-                              <Eye className="size-4" />
-                            ) : (
-                              <EyeOff className="size-4" />
-                            )}
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            aria-label="Copy password"
-                            onClick={() => void readPassword(true)}
-                          >
-                            <Copy className="size-4" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-6 space-y-2">
-                    <p className="field-label">Websites</p>
-                    {websites.map((site) => (
-                      <button
-                        key={site.url}
-                        className="block max-w-full cursor-pointer text-left text-sm break-all text-primary hover:underline"
-                        onClick={() =>
-                          void browser.tabs.create({ url: site.url })
+                    <div className="vault-credentials">
+                      <CredentialRow
+                        label="Username"
+                        onCopy={() =>
+                          void copyCredential(account.email, "Username")
                         }
                       >
-                        {site.url}
-                      </button>
-                    ))}
-                  </div>
-                  {account.notes && (
-                    <div className="mt-6">
-                      <p className="field-label">Notes</p>
-                      <p className="text-sm break-words whitespace-pre-wrap">
-                        {account.notes}
-                      </p>
+                        {account.email}
+                      </CredentialRow>
+                      {account.login_type === "password" ? (
+                        <CredentialRow
+                          label="Password"
+                          onCopy={() => void readPassword(true)}
+                          action={
+                            <Button
+                              size="icon-sm"
+                              variant="ghost"
+                              aria-label={
+                                password === null
+                                  ? "Show password"
+                                  : "Hide password"
+                              }
+                              onClick={() =>
+                                password === null
+                                  ? void readPassword()
+                                  : setRevealed(null)
+                              }
+                            >
+                              {password === null ? <Eye /> : <EyeOff />}
+                            </Button>
+                          }
+                        >
+                          {password ?? "••••••••••••"}
+                        </CredentialRow>
+                      ) : (
+                        <CredentialRow label="Sign-in method">
+                          Google sign-in
+                        </CredentialRow>
+                      )}
                     </div>
-                  )}
-                  <p className="mt-8 text-xs text-muted-foreground">
-                    Last updated {new Date(account.updated_at).toLocaleString()}
-                  </p>
-                </div>
+                    <div className="mt-6 space-y-2">
+                      <p className="vault-field-label">Websites</p>
+                      {websites.map((site) => (
+                        <button
+                          key={site.url}
+                          className="block max-w-full cursor-pointer text-left text-sm break-all text-[var(--vault-label)] hover:underline"
+                          onClick={() =>
+                            void browser.tabs.create({ url: site.url })
+                          }
+                        >
+                          {site.url}
+                        </button>
+                      ))}
+                    </div>
+                    {groupsFor(account, folder, data?.collections).map((g) => (
+                      <span
+                        className="text-xs text-muted-foreground"
+                        key={g.id}
+                      >
+                        {g.name}{" "}
+                      </span>
+                    ))}
+                    {account.tags?.length ? (
+                      <p className="text-sm text-muted-foreground">
+                        {account.tags.map((tag) => "#" + tag).join(" · ")}
+                      </p>
+                    ) : null}
+                    {account.notes && (
+                      <div className="mt-6">
+                        <p className="vault-field-label">Notes</p>
+                        <p className="text-sm break-words whitespace-pre-wrap">
+                          {account.notes}
+                        </p>
+                      </div>
+                    )}
+                    <LoginActivity
+                      key={account.id}
+                      id={account.id}
+                      stamp={account.updated_at}
+                      created={account.created_at}
+                      request={orgRequest}
+                    />
+                  </div>
+                </ScrollArea>
               </>
             ) : (
               <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
@@ -753,11 +840,11 @@ export function App() {
       <footer className="popup-footer">
         <span className="flex items-center gap-2">
           <span
-            className={`size-1.5 rounded-full ${error ? "bg-destructive" : "bg-emerald-500"}`}
+            className={`size-1.5 rounded-full ${error ? "bg-destructive" : "bg-primary"}`}
           />
           {busy ? "Syncing…" : error ? "Sync unavailable" : "Synced"}
         </span>
-        <span>DevLogin</span>
+        <span>Global Login</span>
       </footer>
       <Dialog
         open={!!editor}
@@ -765,24 +852,14 @@ export function App() {
           if (!open) setEditor(null)
         }}
       >
-        <DialogContent className="compact-editor max-h-[510px] overflow-y-auto">
+        <DialogContent className="vault-editor-dialog max-h-[510px] overflow-y-auto sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>
-              {editor === "project"
-                ? editingProject
-                  ? "Edit project"
-                  : "Create project"
-                : editingAccount
-                  ? "Edit login"
-                  : "Add login"}
+              {editingProject ? "Edit project" : "Create project"}
             </DialogTitle>
-            <DialogDescription>
-              {editor === "project"
-                ? "Organize your logins."
-                : "Save a login to your project."}
-            </DialogDescription>
+            <DialogDescription>Organize your logins.</DialogDescription>
           </DialogHeader>
-          {editor === "project" ? (
+          {editor && (
             <ProjectEditor
               key={editingProject?.id ?? "new"}
               project={editingProject}
@@ -802,42 +879,6 @@ export function App() {
                 }, "Project saved")
               }
             />
-          ) : (
-            editor === "account" && (
-              <AccountEditor
-                key={editingAccount?.id ?? "new"}
-                account={editingAccount}
-                projectId={
-                  editingAccount?.project_id ??
-                  project?.id ??
-                  snapshot?.matchedProjectId ??
-                  projects[0]?.id ??
-                  ""
-                }
-                projects={projects}
-                website={
-                  !editingAccount && snapshot?.tabUrl?.startsWith("http")
-                    ? snapshot.tabUrl
-                    : undefined
-                }
-                busy={busy}
-                onCancel={() => setEditor(null)}
-                onSave={(body) =>
-                  void act(async () => {
-                    const saved = await api<Account>(
-                      editingAccount
-                        ? `/api/accounts/${editingAccount.id}`
-                        : "/api/accounts",
-                      editingAccount ? "PUT" : "POST",
-                      body
-                    )
-                    setProjectId(saved.project_id)
-                    setSelected(saved.id)
-                    setEditor(null)
-                  }, "Login saved")
-                }
-              />
-            )
           )}
         </DialogContent>
       </Dialog>

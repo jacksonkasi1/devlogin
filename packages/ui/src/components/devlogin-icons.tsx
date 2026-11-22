@@ -10,4 +10,8 @@ export {
   Eye,
   EyeOff,
   ArrowLeft,
+  ArrowRight,
+  Check,
+  Circle,
+  Globe,
 } from "lucide-react"

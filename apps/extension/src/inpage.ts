@@ -1,5 +1,11 @@
+import { configureIconBackend } from "@workspace/shared"
 import { accountTone } from "./account-tone"
-import { accountWebsites } from "@workspace/shared"
+import {
+  accountWebsites,
+  orderLogins,
+  generatePassword,
+  personalFields,
+} from "@workspace/shared"
 import { createElement } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { ItemIcon } from "@workspace/ui/components/login-icon"
@@ -108,14 +114,34 @@ export function inpage(
     anchor = input
     const menu = node("div", "", "surface dropdown")
     menu.setAttribute("role", "region")
-    menu.setAttribute("aria-label", "DevLogin accounts")
+    menu.setAttribute("aria-label", "Global Login accounts")
     // Keep the original input focused during pointer selection. Keyboard users
     // can still move into the rows with ArrowDown or Tab.
     menu.addEventListener("pointerdown", (event) => {
       if (event.target instanceof Element && event.target.closest("button"))
         event.preventDefault()
     })
-    for (const account of context.accounts) {
+    if (context.backend) configureIconBackend(context.backend)
+    const metadata = [
+      document.title,
+      document
+        .querySelector('meta[name="application-name"]')
+        ?.getAttribute("content"),
+      document
+        .querySelector('meta[property="og:site_name"]')
+        ?.getAttribute("content"),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+    const suggestions = orderLogins(context.accounts, "priority", (a) =>
+      [a.label, ...(a.tags ?? [])].some(
+        (value) => value.length > 2 && metadata.includes(value.toLowerCase())
+      )
+        ? 1
+        : 0
+    )
+    for (const account of suggestions) {
       const button = node(
         "button",
         "",
@@ -132,6 +158,7 @@ export function inpage(
       root.render(
         createElement(ItemIcon, {
           icon: account.icon,
+          savedIcon: account.favicon,
           website: accountWebsites(account, context.project)[0]?.url,
         })
       )
@@ -203,6 +230,63 @@ export function inpage(
     applyTheme()
     position(menu)
   }
+  function signup(input: HTMLInputElement) {
+    const form = input.form
+    if (!form) return false
+    const signupForm =
+      !!form.querySelector('[autocomplete="new-password"]') ||
+      /sign.?up|register|create (an )?account/i.test(form.textContent ?? "")
+    if (!signupForm) return false
+    const fresh =
+      input.type === "password" && input.autocomplete !== "current-password"
+    if (!fresh && !Object.hasOwn(personalFields.profile, input.autocomplete))
+      return false
+    closeSuggestions()
+    anchor = input
+    const menu = node("div", "", "surface dropdown")
+    const button = node(
+      "button",
+      fresh ? "Generate and fill password" : "Choose a signup profile",
+      "account-row"
+    )
+    button.type = "button"
+    button.onclick = (e) => {
+      if (!e.isTrusted || !input.isConnected) return
+      if (fresh) {
+        const password = generatePassword()
+        for (const field of form.querySelectorAll<HTMLInputElement>(
+          "input[type=password]"
+        )) {
+          if (
+            field !== input &&
+            field.autocomplete !== "new-password" &&
+            !/confirm|repeat/i.test(field.name + " " + field.id)
+          )
+            continue
+          if (
+            field.autocomplete === "current-password" ||
+            field.disabled ||
+            field.readOnly ||
+            !field.checkVisibility()
+          )
+            continue
+          Object.getOwnPropertyDescriptor(
+            HTMLInputElement.prototype,
+            "value"
+          )?.set?.call(field, password)
+          field.dispatchEvent(new Event("input", { bubbles: true }))
+          field.dispatchEvent(new Event("change", { bubbles: true }))
+        }
+      } else void send({ type: "open-profiles" }).catch(() => {})
+      closeSuggestions()
+    }
+    menu.append(button)
+    shadow.append(menu)
+    suggestion = menu
+    applyTheme()
+    position(menu)
+    return true
+  }
   function showPending(pending: Pending) {
     if (pending.id === promptId) return
     prompt?.remove()
@@ -214,8 +298,8 @@ export function inpage(
     box.setAttribute(
       "aria-label",
       pending.matches.length
-        ? "Update password in DevLogin?"
-        : "Save login to DevLogin?"
+        ? "Update password in Global Login?"
+        : "Save login to Global Login?"
     )
     let mode: "new" | "update" = pending.matches.length ? "update" : "new"
     const header = node("div", "", "prompt-header")
@@ -394,7 +478,7 @@ export function inpage(
         await refresh()
         box.replaceChildren(
           node("h2", mode === "update" ? "Password updated" : "Login saved"),
-          node("p", "Synced with DevLogin", "muted")
+          node("p", "Synced with Global Login", "muted")
         )
         expiry = setTimeout(close, 2000)
       } catch (failure) {
@@ -476,6 +560,7 @@ export function inpage(
   window.addEventListener("resize", reposition)
   return {
     suggest,
+    signup,
     setSettings,
     showPending,
     closeSuggestions,

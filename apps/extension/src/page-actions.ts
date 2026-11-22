@@ -1,3 +1,4 @@
+import { openTools } from "./tools-window"
 import { browser, type Browser } from "wxt/browser"
 import {
   accountMatches,
@@ -36,6 +37,15 @@ export function pageActions(deps: {
   }
   setInterval(prune, 15_000)
   browser.tabs.onRemoved.addListener((id) => candidates.delete(id))
+  // Content scripts now run on every tab; cache the profile so tabs do not each poll it.
+  let meCache: { at: number; value: Me } | null = null
+  type Me = { is_admin: boolean; can_edit: boolean; approved: boolean }
+  async function profile() {
+    if (meCache && Date.now() - meCache.at < 60_000) return meCache.value
+    const value = await deps.api<Me>("/api/me")
+    meCache = { at: Date.now(), value }
+    return value
+  }
   async function page(
     sender: Browser.runtime.MessageSender
   ): Promise<PageContext> {
@@ -44,13 +54,13 @@ export function pageActions(deps: {
     const { origin } = await deps.configuration()
     const { excluded = [] } = await browser.storage.local.get("excluded")
     if (forbidden(sender.url, origin, excluded as string[]))
-      throw new Error("DevLogin is disabled on this website")
+      throw new Error("Global Login is disabled on this website")
     if (
       !(await browser.permissions.contains({
         origins: [new URL(sender.url).origin + "/*"],
       }))
     )
-      throw new Error("Enable DevLogin on this site first")
+      throw new Error("Enable Global Login on this site first")
     const data = await deps.sync(localAddress(sender.url))
     const matched = await matchPage(
       siteProjects(data, sender.url),
@@ -58,15 +68,15 @@ export function pageActions(deps: {
       sender.tab.id
     )
     const project = matched.project ?? null
-    const me = await deps.api<{ is_admin: boolean; approved: boolean }>(
-      "/api/me"
-    )
+    const me = await profile()
     if (!me.approved) {
       candidates.delete(sender.tab.id)
+      meCache = null
       deps.invalidate()
       throw new Error("Administrator approval is required")
     }
     return {
+      backend: origin,
       settings: await readUiSettings(),
       project,
       accounts: project
@@ -76,7 +86,7 @@ export function pageActions(deps: {
               accountMatches(a, sender.url!)
           )
         : [],
-      admin: me.is_admin,
+      admin: me.is_admin || me.can_edit,
     }
   }
   async function instruction(
@@ -104,6 +114,9 @@ export function pageActions(deps: {
     switch (message.type) {
       case "page":
         return context
+      case "open-profiles":
+        await openTools("choose-profile", tabId, sender.url)
+        return null
       case "manage":
         await browser.tabs.create({ url: (await deps.configuration()).origin })
         return null
@@ -272,6 +285,7 @@ export function pageActions(deps: {
   return {
     handle,
     clear() {
+      meCache = null
       candidates.clear()
     },
   }

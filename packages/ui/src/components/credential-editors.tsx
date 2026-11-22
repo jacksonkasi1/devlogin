@@ -20,7 +20,16 @@ import {
 import { toast } from "./sonner"
 import { Textarea } from "./textarea"
 import { IconPicker, ItemIcon } from "./item-icon"
-import { Eye, EyeOff, Copy, Plus, X } from "lucide-react"
+import { copyCredential } from "./vault"
+import {
+  Eye,
+  EyeOff,
+  Copy,
+  Plus,
+  SlidersHorizontal,
+  ChevronDown,
+  CircleMinus,
+} from "lucide-react"
 export function Choice({
   value,
   options,
@@ -100,20 +109,40 @@ export function ProjectEditor({
   const [name, setName] = useState(project?.name ?? "")
   const [description, setDescription] = useState(project?.description ?? "")
   const [icon, setIcon] = useState(project?.icon ?? "")
+  const [tags, setTags] = useState((project?.tags ?? []).join(", "))
   return (
     <form
       className="space-y-4"
       onSubmit={(event) => {
         event.preventDefault()
-        const result = projectSchema.safeParse({ name, description, icon })
+        const result = projectSchema.safeParse({
+          name,
+          description,
+          icon,
+          tags: tags
+            .split(",")
+            .map((tag) => tag.trim())
+            .filter(Boolean),
+        })
         if (!result.success) {
           toast.error(result.error.issues[0]?.message ?? "Check project fields")
           return
         }
-        onSave({ name: result.data.name, description, icon })
+        onSave({
+          name: result.data.name,
+          description,
+          icon,
+          tags: result.data.tags,
+        })
       }}
     >
       <IconPicker value={icon} onChange={setIcon} folder />
+      <Field
+        name="tags"
+        label="Tags (comma separated)"
+        value={tags}
+        onChange={setTags}
+      />
       <Field
         name="name"
         label="Project name"
@@ -175,6 +204,7 @@ export function AccountEditor({
   const [selectedProject, setProject] = useState(projectId)
   const [notes, setNotes] = useState(account?.notes ?? "")
   const [icon, setIcon] = useState(account?.icon ?? "")
+  const [tags, setTags] = useState((account?.tags ?? []).join(", "))
   const [websites, setWebsites] = useState<Website[]>(
     () =>
       account?.websites ??
@@ -189,7 +219,7 @@ export function AccountEditor({
     )
   return (
     <form
-      className="space-y-4"
+      className="login-editor"
       onSubmit={(event) => {
         event.preventDefault()
         const result = accountSchema.safeParse({
@@ -197,6 +227,10 @@ export function AccountEditor({
           label,
           email,
           notes,
+          tags: tags
+            .split(",")
+            .map((tag) => tag.trim())
+            .filter(Boolean),
           icon,
           websites: websites.filter((site) => site.url.trim()),
           login_type: type,
@@ -210,194 +244,208 @@ export function AccountEditor({
         onSave(result.data)
       }}
     >
-      <div className="flex items-center gap-4">
-        <IconPicker
-          value={icon}
-          onChange={setIcon}
-          website={websites.find((site) => site.url.trim())?.url}
-        />
-        <div className="min-w-0 flex-1">
+      <div className="login-editor-fields">
+        <div className="login-editor-title">
+          <IconPicker
+            value={icon}
+            onChange={setIcon}
+            website={websites.find((site) => site.url.trim())?.url}
+          />
+          <div className="min-w-0 flex-1">
+            <Field
+              name="label"
+              label="Title"
+              value={label}
+              onChange={setLabel}
+              placeholder="Enter a title"
+              required
+            />
+          </div>
+        </div>
+        <div className="login-editor-group">
           <Field
-            name="label"
-            label="Title"
-            value={label}
-            onChange={setLabel}
-            placeholder="e.g. Vizfleet Admin"
+            name="email"
+            label="Username / Email"
+            value={email}
+            onChange={setEmail}
             required
           />
-        </div>
-      </div>
-      <Field
-        name="email"
-        label="Username / Email"
-        value={email}
-        onChange={setEmail}
-        required
-      />
-      {type === "password" && (
-        <div className="space-y-1">
-          <Label htmlFor="password">Password</Label>
-          <div className="flex items-center gap-1">
-            <Input
-              id="password"
-              type={show ? "text" : "password"}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              autoComplete="new-password"
-              required={!account || account.login_type === "google"}
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label={show ? "Hide password" : "Show password"}
-              onClick={() => setShow(!show)}
-            >
-              {show ? <EyeOff /> : <Eye />}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label="Copy password"
-              disabled={!password}
-              onClick={() =>
-                void navigator.clipboard.writeText(password).then(
-                  () => toast.success("Password copied"),
-                  () => toast.error("Clipboard unavailable")
-                )
-              }
-            >
-              <Copy />
-            </Button>
-          </div>
-          {account && (
-            <p className="text-xs text-muted-foreground">
-              Leave blank to keep the current password.
-            </p>
+          {type === "password" && (
+            <div className="login-editor-field">
+              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center gap-1">
+                <Input
+                  id="password"
+                  type={show ? "text" : "password"}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  autoComplete="new-password"
+                  required={!account || account.login_type === "google"}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={show ? "Hide password" : "Show password"}
+                  onClick={() => setShow(!show)}
+                >
+                  {show ? <EyeOff /> : <Eye />}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Copy password"
+                  disabled={!password}
+                  onClick={() => void copyCredential(password, "Password")}
+                >
+                  <Copy />
+                </Button>
+              </div>
+              {account && (
+                <p className="text-xs text-muted-foreground">
+                  Leave blank to keep the current password.
+                </p>
+              )}
+            </div>
           )}
         </div>
-      )}
-      <div className="space-y-1">
-        <Label>Login type</Label>
-        <Choice
-          label="Login type"
-          value={type}
-          options={[
-            { value: "password", label: "Password" },
-            { value: "google", label: "Google" },
-          ]}
-          onChange={(value) => setType(value as "password" | "google")}
-        />
-      </div>
-      <div className="space-y-2">
-        <Label>Websites</Label>
-        {(websites.length ? websites : [{ url: "" }]).map((site, index) => (
-          <div key={index} className="space-y-2">
-            <div className="flex items-center gap-1">
-              <Input
-                aria-label={`Website URL ${index + 1}`}
-                placeholder="https://example.com"
-                value={site.url}
-                onChange={(event) =>
-                  websites.length
-                    ? updateSite(index, { url: event.target.value })
-                    : setWebsites([{ url: event.target.value }])
-                }
+        <details className="login-editor-options">
+          <summary>
+            Login options <ChevronDown size={14} />
+          </summary>
+          <div className="space-y-3 p-3">
+            <Label>Login type</Label>
+            <Choice
+              label="Login type"
+              value={type}
+              options={[
+                { value: "password", label: "Password" },
+                { value: "google", label: "Google" },
+              ]}
+              onChange={(value) => setType(value as "password" | "google")}
+            />
+            <div className="flex items-center gap-2">
+              <Switch
+                id="default-account"
+                checked={isDefault}
+                onCheckedChange={setDefault}
               />
+              <Label htmlFor="default-account">Default account</Label>
+            </div>
+          </div>
+        </details>
+        <div className="login-editor-websites">
+          <Label className="px-3 py-2">Websites</Label>
+          {(websites.length ? websites : [{ url: "" }]).map((site, index) => (
+            <div key={index} className="login-editor-website">
+              <div className="flex min-w-0 items-center gap-1">
+                <div className="min-w-0 flex-1">
+                  <Label htmlFor={`website-${index}`}>
+                    Website URL {index + 1}
+                  </Label>
+                  <Input
+                    id={`website-${index}`}
+                    placeholder="https://example.com"
+                    value={site.url}
+                    onChange={(event) =>
+                      websites.length
+                        ? updateSite(index, { url: event.target.value })
+                        : setWebsites([{ url: event.target.value }])
+                    }
+                  />
+                </div>
+              </div>
+              <details className="login-editor-site-options">
+                <summary
+                  aria-label={`Advanced website settings ${index + 1}`}
+                  title="Advanced website settings"
+                >
+                  <SlidersHorizontal size={15} />
+                </summary>
+                <div className="mt-2 space-y-2">
+                  <Field
+                    name={`path-${index}`}
+                    label="Login path (optional)"
+                    value={site.login_path ?? ""}
+                    onChange={(value) =>
+                      updateSite(index, { login_path: value || undefined })
+                    }
+                    placeholder="/login"
+                  />
+                  {(["email", "password", "submit", "google"] as const).map(
+                    (key) => (
+                      <Field
+                        key={key}
+                        name={`selector-${index}-${key}`}
+                        label={`${key} selector (optional)`}
+                        value={site.selectors?.[key] ?? ""}
+                        onChange={(value) =>
+                          updateSite(index, {
+                            selectors: {
+                              ...(site.selectors ?? {
+                                email: "",
+                                password: "",
+                                submit: "",
+                                google: "",
+                              }),
+                              [key]: value,
+                            },
+                          })
+                        }
+                      />
+                    )
+                  )}
+                </div>
+              </details>
               <Button
                 type="button"
                 variant="ghost"
-                size="icon"
+                size="icon-sm"
+                className="login-editor-website-remove text-destructive"
                 aria-label={`Remove website ${index + 1}`}
                 onClick={() =>
                   setWebsites((items) => items.filter((_, i) => i !== index))
                 }
               >
-                <X />
+                <CircleMinus />
               </Button>
             </div>
-            <details className="text-xs">
-              <summary className="cursor-pointer text-muted-foreground">
-                Advanced website settings
-              </summary>
-              <div className="mt-2 space-y-2">
-                <Field
-                  name={`path-${index}`}
-                  label="Login path (optional)"
-                  value={site.login_path ?? ""}
-                  onChange={(value) =>
-                    updateSite(index, { login_path: value || undefined })
-                  }
-                  placeholder="/login"
-                />
-                {(["email", "password", "submit", "google"] as const).map(
-                  (key) => (
-                    <Field
-                      key={key}
-                      name={`selector-${index}-${key}`}
-                      label={`${key} selector (optional)`}
-                      value={site.selectors?.[key] ?? ""}
-                      onChange={(value) =>
-                        updateSite(index, {
-                          selectors: {
-                            ...(site.selectors ?? {
-                              email: "",
-                              password: "",
-                              submit: "",
-                              google: "",
-                            }),
-                            [key]: value,
-                          },
-                        })
-                      }
-                    />
-                  )
-                )}
-              </div>
-            </details>
-          </div>
-        ))}
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={() =>
-            setWebsites((items) => [
-              ...(items.length ? items : [{ url: "" }]),
-              { url: "" },
-            ])
-          }
-        >
-          <Plus />
-          Add another website
-        </Button>
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor="notes">
-          Notes <span className="text-muted-foreground">(optional)</span>
-        </Label>
-        <Textarea
-          id="notes"
-          rows={3}
-          value={notes}
-          onChange={(event) => setNotes(event.target.value)}
-        />
-      </div>
-      <details className="text-xs">
-        <summary className="cursor-pointer text-muted-foreground">
-          Login options
-        </summary>
-        <div className="mt-2 flex items-center gap-2">
-          <Switch
-            id="default-account"
-            checked={isDefault}
-            onCheckedChange={setDefault}
-          />
-          <Label htmlFor="default-account">Default account</Label>
+          ))}
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="login-editor-add"
+            onClick={() =>
+              setWebsites((items) => [
+                ...(items.length ? items : [{ url: "" }]),
+                { url: "" },
+              ])
+            }
+          >
+            <Plus />
+            Add another website
+          </Button>
         </div>
-      </details>
-      <div className="sticky -bottom-6 -mx-6 flex flex-wrap items-center justify-end gap-2 border-t bg-popover px-6 py-4">
+        <Field
+          name="tags"
+          label="Tags (comma separated)"
+          value={tags}
+          onChange={setTags}
+        />
+        <div className="login-editor-notes">
+          <Label htmlFor="notes">Notes</Label>
+          <Textarea
+            id="notes"
+            rows={3}
+            placeholder="Add notes about this login"
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+          />
+        </div>
+      </div>
+      <div className="login-editor-footer">
         {projects.length > 0 && (
           <div className="mr-auto min-w-36">
             <Choice

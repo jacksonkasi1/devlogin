@@ -1,6 +1,12 @@
 export function randomToken() {
   return base64url(crypto.getRandomValues(new Uint8Array(32)))
 }
+function encodeBytes(bytes: Uint8Array) {
+  let text = ""
+  for (let offset = 0; offset < bytes.length; offset += 8192)
+    text += String.fromCharCode(...bytes.subarray(offset, offset + 8192))
+  return btoa(text)
+}
 export function base64url(bytes: Uint8Array) {
   return btoa(String.fromCharCode(...bytes))
     .replace(/\+/g, "-")
@@ -38,7 +44,7 @@ export async function encrypt(
     await key(secret),
     new TextEncoder().encode(value)
   )
-  return `v1.${btoa(String.fromCharCode(...iv))}.${btoa(String.fromCharCode(...new Uint8Array(ciphertext)))}`
+  return `v1.${btoa(String.fromCharCode(...iv))}.${encodeBytes(new Uint8Array(ciphertext))}`
 }
 export async function decrypt(
   value: string,

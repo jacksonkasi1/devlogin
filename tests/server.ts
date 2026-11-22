@@ -76,6 +76,7 @@ if (!bundle.success) throw new Error("Fixture bundle failed")
 const reactJs = await bundle.outputs[0]!.text()
 const webDist = new URL("../apps/web/dist/", import.meta.url)
 Bun.serve({
+  hostname: "localhost",
   port: 8799,
   async fetch(request) {
     const url = new URL(request.url)
@@ -93,7 +94,7 @@ Bun.serve({
         )
         .run(fixtureEncrypted)
       db.sqlite.exec(
-        "UPDATE users SET approved = 1, is_admin = 1 WHERE id = 'test-admin'"
+        "UPDATE users SET approved = 1, is_admin = 1, can_edit = 1 WHERE id = 'test-admin'"
       )
       db.sqlite
         .query(
@@ -113,7 +114,9 @@ Bun.serve({
       return Response.json({ ok: true })
     }
     if (url.pathname === "/fixture/member") {
-      db.sqlite.exec("UPDATE users SET is_admin = 0 WHERE id = 'test-admin'")
+      db.sqlite.exec(
+        "UPDATE users SET is_admin = 0, can_edit = 0 WHERE id = 'test-admin'"
+      )
       return Response.json({ ok: true })
     }
     if (url.pathname.startsWith("/api/"))

@@ -1,0 +1,27 @@
+.editor-window {
+  display: flex;
+  height: 100dvh;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+.editor-window-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+}
+.editor-window-header h1 {
+  font-size: 14px;
+  font-weight: 650;
+}
+.editor-window-message {
+  padding: 12px 18px;
+  font-size: 13px;
+}
+.editor-window .login-editor {
+  flex: 1;
+}
+.editor-window .login-editor-fields {
+  flex: 1;
+}

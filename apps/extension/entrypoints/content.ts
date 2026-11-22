@@ -1,3 +1,4 @@
+import { readOrFillProfile } from "../src/profile-fields"
 import { defineContentScript } from "wxt/utils/define-content-script"
 import { browser } from "wxt/browser"
 import { send } from "../src/client"
@@ -8,7 +9,8 @@ import type { UiSettings } from "../src/ui-settings"
 import { inpage } from "../src/inpage"
 
 export default defineContentScript({
-  registration: "runtime",
+  matches: ["https://*/*", "http://*/*"],
+  registration: "manifest",
   runAt: "document_idle",
   main(ctx) {
     if (window.top !== window || document.querySelector("devlogin-ui")) return
@@ -146,6 +148,8 @@ export default defineContentScript({
           pageAt = Date.now()
           ui.setSettings(pageContext.settings)
         }
+        if (document.activeElement === input && !filling && ui.signup(input))
+          return
         if (filling || document.activeElement !== input || !pageContext.project)
           return
         const fields = detectForm(pageContext.project)
@@ -161,6 +165,11 @@ export default defineContentScript({
     browser.runtime.onMessage.addListener(
       (
         message:
+          | {
+              type: "profile-fields"
+              origin: string
+              fields?: Record<string, string>
+            }
           | Fill
           | { type: "ui-settings-changed"; settings: UiSettings }
           | { type: "local-identity-changed" },
@@ -168,6 +177,21 @@ export default defineContentScript({
         respond
       ) => {
         if (sender.id !== browser.runtime.id) return
+        if (message.type === "profile-fields") {
+          if (
+            !sender.url?.startsWith(browser.runtime.getURL("/tools.html")) ||
+            location.origin !== message.origin
+          )
+            return
+          void send({ type: "page" })
+            .then(() => {
+              if (location.origin !== message.origin)
+                throw new Error("Page changed")
+              respond({ ok: true, fields: readOrFillProfile(message.fields) })
+            })
+            .catch((e) => respond({ ok: false, error: e.message }))
+          return true
+        }
         if (message.type === "local-identity-changed") {
           pageContext = null
           pageAt = 0

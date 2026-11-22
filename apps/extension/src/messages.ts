@@ -38,6 +38,7 @@ export type Message =
       mode?: "new" | "update"
     }
   | { type: "dismiss"; id: string }
+  | { type: "open-profiles" }
   | { type: "manage" }
   | { type: "permissions-changed" }
   | { type: "exclude"; origin: string; excluded: boolean }
@@ -47,6 +48,7 @@ export type Context = {
   preference: Preference
 } | null
 export type Snapshot = {
+  pageTitle?: string
   matchedProjectId: string | null
   settings: UiSettings
   user: User | null
@@ -58,6 +60,7 @@ export type Snapshot = {
   excluded?: string[]
 }
 export type PageContext = {
+  backend?: string
   settings: UiSettings
   project: Project | null
   accounts: Account[]

@@ -36,6 +36,7 @@ export function readPageIdentity(): PageIdentity {
 }
 export function sameIdentity(saved: PageIdentity, current: PageIdentity) {
   // A declared application name is more stable than a route-dependent title.
+  if (!saved.title && !saved.application && !saved.site) return true
   const keys =
     saved.application || saved.site
       ? (["application", "site"] as const)
@@ -51,7 +52,7 @@ export async function tabIdentity(tabId: number): Promise<PageIdentity> {
     func: readPageIdentity,
   })
   if (!result?.result)
-    throw new Error("Enable DevLogin on this site to identify it")
+    throw new Error("Enable Global Login on this site to identify it")
   return result.result
 }
 export async function matchPage(
@@ -63,9 +64,13 @@ export async function matchPage(
     return { project: matchProject(projects, address), identity: undefined }
   // Unknown sites have no project identity to verify. Avoid inspecting a tab
   // that may already be navigating after its login form was submitted.
-  const eligible = projects.filter((project) => matchProject([project], address))
+  const eligible = projects.filter((project) =>
+    matchProject([project], address)
+  )
   if (!eligible.length) return { project: undefined, identity: undefined }
   const identity = await tabIdentity(tabId)
+  // One project on this port: nothing to disambiguate, so no manual step is needed.
+  if (eligible.length === 1) return { project: eligible[0], identity }
   const { localBindings = [] } =
     await browser.storage.local.get("localBindings")
   const bindings = localBindings as LocalBinding[]
@@ -79,8 +84,18 @@ export async function matchPage(
           sameIdentity(binding.identity, identity)
       )
   )
+  if (matches.length === 1) return { project: matches[0], identity }
+  // Several projects share this port: recognise the running one by its declared name.
+  const declared = [identity.application, identity.site, identity.title]
+    .join(" ")
+    .toLowerCase()
+  const named = eligible.filter(
+    (project) =>
+      project.name.trim().length > 2 &&
+      declared.includes(project.name.trim().toLowerCase())
+  )
   // Generic/identical metadata cannot distinguish two applications. Never guess.
-  return { project: matches.length === 1 ? matches[0] : undefined, identity }
+  return { project: named.length === 1 ? named[0] : undefined, identity }
 }
 export async function bindLocalProject(
   project: Project,

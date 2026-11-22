@@ -18,7 +18,7 @@ export function publicWebsite(value: string): URL | undefined {
   }
 }
 
-async function limitedHtml(response: Response) {
+async function limitedHtml(response: Response, headOnly = true) {
   const reader = response.body?.getReader()
   if (!reader) return ""
   const decoder = new TextDecoder()
@@ -29,10 +29,15 @@ async function limitedHtml(response: Response) {
       const { done, value } = await reader.read()
       if (done) break
       bytes += value.byteLength
-      if (bytes > 262144) break
+      if (bytes > 262144) {
+        html += decoder.decode(
+          value.subarray(0, 262144 - (bytes - value.byteLength))
+        )
+        break
+      }
       html += decoder.decode(value, { stream: true })
       const end = html.toLowerCase().indexOf("</head>")
-      if (end !== -1) return html.slice(0, end + 7)
+      if (headOnly && end !== -1) return html.slice(0, end + 7)
     }
     return html
   } finally {
@@ -66,32 +71,87 @@ export async function declaredFavicon(
       await response.body?.cancel()
       return
     }
-    const html = await limitedHtml(response)
+    const html = await limitedHtml(response, false)
     let base = page.href
-    let icon: string | undefined, touchIcon: string | undefined
+    const resolve = (value: string | null, from = base) => {
+      if (!value) return
+      try {
+        return publicWebsite(new URL(value, from).href)?.href
+      } catch {
+        return
+      }
+    }
+    let icon: string | undefined,
+      touch: string | undefined,
+      mask: string | undefined
+    let manifest: string | undefined,
+      logo: string | undefined,
+      social: string | undefined
     await new HTMLRewriter()
       .on("base[href]", {
-        element(element) {
-          const candidate = publicWebsite(
-            new URL(element.getAttribute("href")!, page).href
-          )
-          if (candidate) base = candidate.href
+        element(el) {
+          base = resolve(el.getAttribute("href"), page.href) ?? base
         },
       })
-      .on("link[href][rel]", {
-        element(element) {
-          const rel = element.getAttribute("rel")!.toLowerCase().split(/\s+/)
-          if (!rel.includes("icon") && !rel.includes("apple-touch-icon")) return
-          const candidate = publicWebsite(
-            new URL(element.getAttribute("href")!, base).href
+      .on("link[rel][href]", {
+        element(el) {
+          const rel = el.getAttribute("rel")!.toLowerCase().split(/\s+/)
+          const href = resolve(el.getAttribute("href"))
+          if (rel.includes("icon")) icon ??= href
+          if (rel.some((r) => r.startsWith("apple-touch-icon"))) touch ??= href
+          if (rel.includes("mask-icon")) mask ??= href
+          if (rel.includes("manifest")) manifest ??= href
+        },
+      })
+      .on("meta[content]", {
+        element(el) {
+          const prop = (
+            el.getAttribute("property") ??
+            el.getAttribute("name") ??
+            el.getAttribute("itemprop")
+          )?.toLowerCase()
+          if (prop === "msapplication-tileimage" || prop === "logo")
+            logo ??= resolve(el.getAttribute("content"))
+          if (prop === "og:image" || prop === "twitter:image")
+            social ??= resolve(el.getAttribute("content"))
+        },
+      })
+      .on("img[src]", {
+        element(el) {
+          if (
+            /logo|brandmark|wordmark/i.test(
+              ["src", "alt", "id", "class"]
+                .map((key) => el.getAttribute(key))
+                .join(" ")
+            )
           )
-          if (!candidate) return
-          if (rel.includes("icon")) icon ??= candidate.href
-          else touchIcon ??= candidate.href
+            logo ??= resolve(el.getAttribute("src"))
         },
       })
       .transform(new Response(html))
       .text()
-    return icon ?? touchIcon
+    if (icon || touch) return icon ?? touch
+    if (manifest) {
+      try {
+        const response = await fetch(manifest, {
+          signal,
+          redirect: "manual",
+          headers: { Accept: "application/manifest+json,application/json" },
+        })
+        if (response.ok) {
+          const data = JSON.parse(await limitedHtml(response, false))
+          if (Array.isArray(data.icons)) {
+            for (const entry of data.icons) {
+              const src =
+                typeof entry?.src === "string" && resolve(entry.src, manifest)
+              if (src) return src
+            }
+          }
+        } else await response.body?.cancel()
+      } catch {
+        /* A broken manifest may still have a usable HTML fallback. */
+      }
+    }
+    return mask ?? logo ?? social
   }
 }
