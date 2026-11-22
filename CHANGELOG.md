@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.2 · 2026-11-22
+
+- Open the Global Login repository from **Support on GitHub** in the extension footer.
+
 ## 1.2.1 · 2026-11-22
 
 - Create collections from the overview, edit them from their cards, and choose a collection emoji or icon.

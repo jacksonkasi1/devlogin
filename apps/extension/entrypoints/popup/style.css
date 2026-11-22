@@ -82,3 +82,19 @@ body {
   overflow-y: auto;
   padding: 12px 24px;
 }
+
+.github-support {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 3px;
+}
+.github-support:hover,
+.github-support:focus-visible {
+  color: var(--vault-label);
+  text-decoration: underline;
+}
+.github-support:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
