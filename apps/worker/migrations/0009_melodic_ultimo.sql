@@ -1,0 +1,1 @@
+ALTER TABLE `collections` ADD `project_id` text REFERENCES projects(id) ON DELETE CASCADE;

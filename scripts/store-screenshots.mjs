@@ -92,6 +92,27 @@ try {
     await cover.locator("img").evaluate((img) => img.decode())
     await cover.screenshot({ path: out + "/" + name + ".png" })
   }
+  for (const [name, icon, description] of [
+    ["Developer portal", "💻", "Local and staging environments"],
+    ["Release console", "🚀", "Deployment and build services"],
+    ["Documentation", "📚", "Publishing tools and editorial accounts"],
+  ])
+    await api("projects", "POST", { name, icon, description })
+  await context.addCookies([
+    { name: "devlogin_session", value: token, url: backend },
+  ])
+  await cover.emulateMedia({ colorScheme: "dark" })
+  await cover.goto(backend)
+  await cover.getByRole("button", { name: "Project grid", exact: true }).click()
+  await cover
+    .locator(".library-grid")
+    .getByText("Documentation", { exact: true })
+    .waitFor()
+  await cover.evaluate(() => document.fonts.ready)
+  await cover.screenshot({
+    path: out + "/projects.png",
+    animations: "disabled",
+  })
 } finally {
   await context.close()
   await rm(profile, { recursive: true, force: true })

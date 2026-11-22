@@ -182,6 +182,12 @@ In Claude, for example: “Create a Platform collection for the platform tag, ta
 - [Changelog](CHANGELOG.md)
 - [Self-hosting and upgrades](SELF_HOSTING.md)
 
+### Project dashboard
+
+Open **Project grid** to browse project cards. Use **Collections** to browse across projects. From a project, the collections menu creates groups scoped to that project. Assign them in the project or login editor. Each existing login also has a private attachments section for uploads and existing files.
+
+![Global Login project dashboard](apps/web/public/store/projects.png)
+
 ### Chrome Web Store screenshots
 
 These 1280 × 800 PNGs use an isolated demonstration vault with masked identifiers.

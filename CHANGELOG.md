@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0 · 2026-11-22
+
+- Browse projects and collections as cards. Organize logins within a project or group entire projects together.
+- Reveal the saved password in the editor, scroll long forms, and manage private attachments on existing logins.
+- Recheck edit permissions before offering to save a login and respect saved localhost project identities.
+- Added category icons to the web and extension item menus.
+
 ## 1.1.3 · 2026-11-22
 
 - Refined the Other logins tab with curved shoulders and an aligned chevron.

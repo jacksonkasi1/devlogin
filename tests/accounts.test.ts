@@ -640,7 +640,40 @@ test("attachment uploads enforce the limit and preserve ownership on download, r
       )
     ).json()) as { id: string }
   ).id
+  const login = await account((await project()).id)
   const path = "/files/" + id
+  expect(
+    (await request(path, "PATCH", { account_id: login.id }, "member")).status
+  ).toBe(200)
+  expect(
+    (await request(path, "PATCH", { account_id: null }, "viewer")).status
+  ).toBe(404)
+  expect(
+    await (await request("/files", "GET", undefined, "viewer")).json()
+  ).toEqual([])
+  const upload = await app.request(
+    "http://localhost:8787/api/files?name=login.json&account=" + login.id,
+    {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer member",
+        "Content-Type": "application/octet-stream",
+        "Content-Length": "2",
+      },
+      body: "{}",
+    },
+    env
+  )
+  expect(upload.status).toBe(201)
+  const uploaded = (await upload.json()) as { id: string; account_id: string }
+  expect(uploaded.account_id).toBe(login.id)
+  expect((await request("/accounts/" + login.id, "DELETE")).status).toBe(200)
+  expect(
+    await (await request("/files", "GET", undefined, "member")).json()
+  ).toEqual(
+    expect.arrayContaining([expect.objectContaining({ id, account_id: null })])
+  )
+  await request("/files/" + uploaded.id, "DELETE", undefined, "member")
   expect(await (await request(path, "GET", undefined, "member")).text()).toBe(
     "{}"
   )

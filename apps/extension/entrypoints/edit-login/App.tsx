@@ -109,6 +109,20 @@ export function App() {
         </div>
       ) : project ? (
         <AccountEditor
+          groups={snapshot?.data?.collections}
+          loadPassword={
+            account
+              ? async () =>
+                  (
+                    await send<{ password: string }>({
+                      type: "api",
+                      path: `/api/accounts/${account.id}/password`,
+                      method: "POST",
+                      body: {},
+                    })
+                  ).password
+              : undefined
+          }
           account={account}
           projectId={project.id}
           projects={projects}

@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono"
 import { and, eq, desc } from "drizzle-orm"
 import { z } from "zod"
-import { attachments as files } from "./schema"
+import { accounts, attachments as files } from "./schema"
 import { database, type AppEnv } from "./auth"
 export const maxFileBytes = 50 * 1024 * 1024
 const filename = z
@@ -12,6 +12,7 @@ const filename = z
   .regex(/^[^/\\\x00-\x1f\x7f]+$/)
 const metadata = {
   id: files.id,
+  account_id: files.account_id,
   name: files.name,
   size: files.size,
   created_at: files.created_at,
@@ -23,15 +24,26 @@ async function store(
   c: Context<AppEnv>,
   name: string,
   size: number,
-  body: ReadableStream | Uint8Array
+  body: ReadableStream | Uint8Array,
+  accountId?: string
 ) {
   const id = crypto.randomUUID()
+  if (
+    accountId &&
+    !(await database(c.env)
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(eq(accounts.id, accountId))
+      .get())
+  )
+    return c.json({ error: "Login not found" }, 404)
   await c.env.FILES.put(key(c, id), body)
   try {
     const [file] = await database(c.env)
       .insert(files)
       .values({
         id,
+        account_id: accountId,
         owner_id: c.get("user").id,
         name,
         size,
@@ -64,15 +76,20 @@ fileApi.post("/", async (c) => {
     c,
     filename.parse(c.req.query("name")),
     Number(length),
-    c.req.raw.body ?? new Uint8Array()
+    c.req.raw.body ?? new Uint8Array(),
+    c.req.query("account") || undefined
   )
 })
 fileApi.post("/text", async (c) => {
-  const { name, text } = z
-    .object({ name: filename, text: z.string().max(64000) })
+  const { name, text, account_id } = z
+    .object({
+      name: filename,
+      text: z.string().max(64000),
+      account_id: z.string().min(1).optional(),
+    })
     .parse(await c.req.json())
   const data = new TextEncoder().encode(text)
-  return store(c, name, data.byteLength, data)
+  return store(c, name, data.byteLength, data, account_id)
 })
 fileApi.get("/:id", async (c) => {
   const id = c.req.param("id")
@@ -96,7 +113,13 @@ fileApi.get("/:id", async (c) => {
   })
 })
 fileApi.patch("/:id", async (c) => {
-  const input = z.object({ name: filename }).parse(await c.req.json())
+  const input = z
+    .object({
+      name: filename.optional(),
+      account_id: z.string().min(1).nullable().optional(),
+    })
+    .refine((input) => Object.keys(input).length > 0)
+    .parse(await c.req.json())
   const [file] = await database(c.env)
     .update(files)
     .set(input)

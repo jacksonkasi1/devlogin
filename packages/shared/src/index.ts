@@ -518,7 +518,12 @@ export function generatePassword(length = 24) {
     }
   return password
 }
-export type Collection = { id: string; name: string; tag: string }
+export type Collection = {
+  project_id?: string | null
+  id: string
+  name: string
+  tag: string
+}
 export function groupsFor(
   account: Account,
   project: Project | undefined,
@@ -529,7 +534,11 @@ export function groupsFor(
       s.toLowerCase()
     )
   )
-  return groups.filter((g) => tags.has(g.tag.toLowerCase()))
+  return groups.filter(
+    (g) =>
+      (!g.project_id || g.project_id === account.project_id) &&
+      tags.has(g.tag.toLowerCase())
+  )
 }
 export type SortOrder = "priority" | "newest" | "oldest" | "updated" | "name"
 export function orderLogins(

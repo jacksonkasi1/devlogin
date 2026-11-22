@@ -1,3 +1,4 @@
+import { LibraryOverview } from "./library-overview"
 import { groupsFor, orderLogins, type SortOrder } from "@workspace/shared"
 import {
   OrganizationMenu,
@@ -12,7 +13,13 @@ import {
   type Sync,
 } from "@workspace/shared"
 import {
+  Shield,
+  Paperclip,
+  Dice5,
   ArrowLeft,
+  LayoutGrid,
+  Layers,
+  List,
   ExternalLink,
   KeyRound,
   MoreHorizontal,
@@ -65,6 +72,7 @@ import {
   LoginRow,
   copyCredential,
 } from "@workspace/ui/components/vault"
+import { Files } from "./files"
 import { AccountPassword } from "./account-password"
 import { toast } from "@workspace/ui/components/sonner"
 
@@ -177,6 +185,7 @@ export function ManagementDialogs({
           {editor?.kind === "project" && (
             <ProjectEditor
               key={editor.project?.id ?? "new"}
+              groups={data?.collections}
               project={editor.project}
               busy={busy}
               onCancel={() => setEditor(null)}
@@ -195,6 +204,27 @@ export function ManagementDialogs({
             <>
               <AccountEditor
                 key={editor.account?.id ?? project.id}
+                groups={data?.collections}
+                attachments={
+                  editor.account && (
+                    <Files
+                      key={editor.account.id}
+                      accountId={editor.account.id}
+                    />
+                  )
+                }
+                loadPassword={
+                  editor.account
+                    ? async () =>
+                        (
+                          await orgRequest<{ password: string }>(
+                            `/api/accounts/${editor.account!.id}/password`,
+                            "POST",
+                            {}
+                          )
+                        ).password
+                    : undefined
+                }
                 account={editor.account}
                 projectId={project.id}
                 projects={data?.projects ?? []}
@@ -284,6 +314,7 @@ export function ProjectsView({
   setMobilePanel,
   moving,
   refreshGroups,
+  openPersonal,
   onRefreshIcon,
   onMove,
 }: {
@@ -300,9 +331,11 @@ export function ProjectsView({
   setMobilePanel: (panel: "projects" | "accounts" | "details") => void
   moving: boolean
   refreshGroups: () => Promise<unknown>
+  openPersonal: (destination: "vault" | "generator" | "files") => void
   onRefreshIcon: (id: string) => void
   onMove: (account: Account, project: Project) => void
 }) {
+  const [view, setView] = useState<"list" | "projects" | "collections">("list")
   const [group, setGroup] = useState("")
   const [sort, setSort] = useState<SortOrder>(
     () => (localStorage.getItem("login-sort") as SortOrder) ?? "priority"
@@ -346,12 +379,42 @@ export function ProjectsView({
   const project = projects.find((p) => p.id === account?.project_id)
   const panel = mobilePanel
   const chooseProject = (p: Project | null) => {
+    setView("list")
     setSelected(p)
     setAccountId(null)
     setMobilePanel("accounts")
   }
   const row =
     "flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors duration-150 hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+  const collections = data?.collections ?? []
+  const overview = (kind: "projects" | "collections") => (
+    <LibraryOverview
+      kind={kind}
+      data={data}
+      query={query}
+      admin={admin}
+      group={group}
+      setGroup={setGroup}
+      sort={sort}
+      setSort={setSort}
+      request={orgRequest}
+      refreshGroups={refreshGroups}
+      createProject={() => setEditor({ kind: "project" })}
+      chooseProject={chooseProject}
+      openCollection={(id) => {
+        setGroup(id)
+        setView("projects")
+        setAccountId(null)
+        setSelected(null)
+        setMobilePanel("details")
+      }}
+    />
+  )
+  const browsing =
+    view !== "list" &&
+    !selected &&
+    !accountId &&
+    !(query && mobilePanel === "accounts")
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden">
       <aside
@@ -359,7 +422,7 @@ export function ProjectsView({
         className={`${panel === "projects" ? "flex" : "hidden"} w-full shrink-0 flex-col border-r bg-sidebar md:flex md:w-[190px] lg:w-[232px]`}
       >
         <div className="vault-pane-bar flex items-center justify-between px-4">
-          <h2 className="text-sm font-semibold">Projects</h2>
+          <h2 className="text-sm font-semibold">Workspace</h2>
           {admin && (
             <IconAction
               label="Add Project"
@@ -371,10 +434,35 @@ export function ProjectsView({
         </div>
         <ScrollArea className="min-h-0 flex-1">
           <nav className="space-y-1 px-2 pb-4">
+            {(["projects", "collections"] as const).map((mode) => (
+              <button
+                key={mode}
+                className={
+                  row + (browsing && view === mode ? " bg-accent" : "")
+                }
+                onClick={() => {
+                  setGroup("")
+                  setSelected(null)
+                  setAccountId(null)
+                  setView(mode)
+                  setMobilePanel("details")
+                }}
+              >
+                {mode === "projects" ? (
+                  <LayoutGrid size={16} />
+                ) : (
+                  <Layers size={16} />
+                )}{" "}
+                {mode === "projects" ? "Project grid" : "Collections"}
+              </button>
+            ))}
             <button
-              className={`${row} ${!selected ? "bg-accent font-medium" : ""}`}
-              aria-current={!selected ? "true" : undefined}
-              onClick={() => chooseProject(null)}
+              className={`${row} ${!browsing && !selected ? "bg-accent font-medium" : ""}`}
+              aria-current={!browsing && !selected ? "true" : undefined}
+              onClick={() => {
+                setGroup("")
+                chooseProject(null)
+              }}
             >
               <KeyRound className="size-4" />
               <span className="flex-1">All Logins</span>
@@ -383,6 +471,7 @@ export function ProjectsView({
               </span>
             </button>
             <Separator className="my-3" />
+            <h3 className="library-nav-heading">Projects</h3>
             {!data && loading
               ? Array.from({ length: 4 }, (_, i) => (
                   <Skeleton key={i} className="my-2 h-10" />
@@ -392,7 +481,10 @@ export function ProjectsView({
                     key={p.id}
                     className={`${row} ${selected?.id === p.id ? "bg-accent font-medium" : ""} ${dropId === p.id ? "bg-accent ring-2 ring-primary ring-inset" : ""}`}
                     aria-current={selected?.id === p.id ? "true" : undefined}
-                    onClick={() => chooseProject(p)}
+                    onClick={() => {
+                      setGroup("")
+                      chooseProject(p)
+                    }}
                     onDragOver={(event) => {
                       if (!canDrop(p)) return
                       event.preventDefault()
@@ -440,295 +532,342 @@ export function ProjectsView({
             )}
           </nav>
         </ScrollArea>
-        <div className="border-t px-4 py-3 text-xs text-muted-foreground">
-          Shared workspace
-        </div>
+        <nav aria-label="Personal tools" className="border-t p-2">
+          <h3 className="library-nav-heading">Personal</h3>
+          <button className={row} onClick={() => openPersonal("vault")}>
+            <Shield size={16} />
+            My private vault
+          </button>
+          <button className={row} onClick={() => openPersonal("files")}>
+            <Paperclip size={16} />
+            File attachments
+          </button>
+          <button className={row} onClick={() => openPersonal("generator")}>
+            <Dice5 size={16} />
+            Password generator
+          </button>
+        </nav>
       </aside>
-      <section
-        aria-label="Accounts"
-        className={`${panel === "accounts" ? "flex" : "hidden"} w-full shrink-0 flex-col border-r md:flex md:w-[280px] lg:w-[320px]`}
-      >
-        <div className="vault-pane-bar flex items-center gap-2 px-4">
+      {browsing ? (
+        <div className="min-w-0 flex-1 overflow-auto">
           <Button
             variant="ghost"
-            size="icon-sm"
             className="md:hidden"
-            aria-label="Back to projects"
-            onClick={() => setMobilePanel("projects")}
+            onClick={() => {
+              setView("list")
+              setMobilePanel("projects")
+            }}
           >
             <ArrowLeft />
+            Workspace
           </Button>
-          <h2 className="min-w-0 flex-1 truncate text-sm font-medium">
-            {data?.collections?.find((g) => g.id === group)?.name ??
-              selected?.name ??
-              "All Logins"}
-          </h2>
-          <span className="text-xs text-muted-foreground">
-            {accounts.length}
-          </span>
-          <OrganizationMenu
-            sort={sort}
-            onSort={(value) => {
-              setSort(value)
-              localStorage.setItem("login-sort", value)
-            }}
-            groups={data?.collections ?? []}
-            group={group}
-            change={setGroup}
-            request={orgRequest}
-            editable={admin}
-            refresh={refreshGroups}
-          />
-          {selected && admin && (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Project actions"
-                  />
-                }
-              >
-                <MoreHorizontal />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onClick={() =>
-                    setEditor({ kind: "project", project: selected })
-                  }
-                >
-                  <Pencil />
-                  Edit project
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={() =>
-                    setEditor({
-                      kind: "delete",
-                      path: `/api/projects/${selected.id}`,
-                      title: `Delete ${selected.name}?`,
-                    })
-                  }
-                >
-                  <Trash2 />
-                  Delete project
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          {overview(view === "projects" ? "projects" : "collections")}
         </div>
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="space-y-1 p-2">
-            {!data && loading
-              ? Array.from({ length: 5 }, (_, i) => (
-                  <Skeleton key={i} className="mb-2 h-16" />
-                ))
-              : accounts.map((a) => {
-                  const p = projects.find((p) => p.id === a.project_id)
-                  return (
-                    <LoginRow
-                      key={a.id}
-                      name={
-                        a.label === a.email ? (p?.name ?? "Login") : a.label
-                      }
-                      username={a.email}
-                      icon={a.icon}
-                      website={accountWebsites(a, p)[0]?.url}
-                      favicon={a.favicon}
-                      draggable={admin && !loading && !moving}
-                      title={
-                        admin
-                          ? "Drag onto a project to move this login"
-                          : undefined
-                      }
-                      onDragStart={(event) => {
-                        event.dataTransfer.setData(
-                          "application/x-devlogin-account",
-                          a.id
-                        )
-                        event.dataTransfer.effectAllowed = "move"
-                        setDraggedId(a.id)
-                      }}
-                      onDragEnd={() => {
-                        setDraggedId(null)
-                        setDropId(null)
-                      }}
-                      aria-pressed={account?.id === a.id}
-                      className={`${draggedId === a.id ? "opacity-50" : ""} ${admin && !moving ? "cursor-grab active:cursor-grabbing" : ""}`}
-                      onClick={() => {
-                        setAccountId(a.id)
-                        setMobilePanel("details")
-                      }}
-                    />
-                  )
-                })}
-            {data && !accounts.length && (
-              <div className="px-3 py-8 text-sm text-muted-foreground">
-                <p>{query ? "No matching logins" : "No logins yet"}</p>
-                <p className="mt-1 text-xs">
-                  {query
-                    ? "Try a different name, username, or website."
-                    : admin
-                      ? "Use Add Login to save an account."
-                      : "Your administrator can add logins."}
-                </p>
-              </div>
-            )}
-          </div>
-        </ScrollArea>
-      </section>
-      <section
-        aria-label="Account details"
-        className={`${panel === "details" ? "flex" : "hidden"} min-w-0 flex-1 flex-col md:flex`}
-      >
-        <div className="vault-pane-bar flex items-center justify-between gap-2 px-4 md:px-6">
-          <div className="flex min-w-0 items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="md:hidden"
-              aria-label="Back to accounts"
-              onClick={() => setMobilePanel("accounts")}
-            >
-              <ArrowLeft />
-            </Button>
-            <span className="truncate text-xs text-muted-foreground">
-              {project ? `${project.name} / Login` : "Login details"}
-            </span>
-          </div>
-          {account && project && admin && (
-            <div className="flex gap-1">
+      ) : (
+        <>
+          <section
+            aria-label="Accounts"
+            className={`${panel === "accounts" ? "flex" : "hidden"} w-full shrink-0 flex-col border-r md:flex md:w-[280px] lg:w-[320px]`}
+          >
+            <div className="vault-pane-bar flex items-center gap-2 px-4">
               <Button
-                size="sm"
                 variant="ghost"
-                onClick={() => setEditor({ kind: "account", project, account })}
+                size="icon-sm"
+                className="md:hidden"
+                aria-label="Back to projects"
+                onClick={() => setMobilePanel("projects")}
               >
-                <Pencil />
-                Edit
+                <ArrowLeft />
               </Button>
-              <LoginActions
-                onRefreshIcon={
-                  admin && !account.icon
-                    ? () => onRefreshIcon(account.id)
-                    : undefined
-                }
-                onEdit={() => setEditor({ kind: "account", project, account })}
-                onCopyUsername={() =>
-                  void copyCredential(account.email, "Username")
-                }
-                onDelete={() =>
-                  setEditor({
-                    kind: "delete",
-                    path: `/api/accounts/${account.id}`,
-                    title: `Delete ${account.label}?`,
-                  })
-                }
-              />
-            </div>
-          )}
-        </div>
-        <ScrollArea className="min-h-0 flex-1">
-          {account && project ? (
-            <div className="vault-detail mx-auto max-w-3xl">
-              <LoginHeading
-                title={
-                  account.label === account.email ? project.name : account.label
-                }
-                icon={account.icon}
-                website={accountWebsites(account, project)[0]?.url}
-                favicon={account.favicon}
-              >
-                {account.is_default && (
-                  <Badge variant="secondary" className="ml-auto">
-                    Default
-                  </Badge>
+              <h2 className="min-w-0 flex-1 truncate text-sm font-medium">
+                {data?.collections?.find((g) => g.id === group)?.name ??
+                  selected?.name ??
+                  "All Logins"}
+              </h2>
+              <span className="text-xs text-muted-foreground">
+                {accounts.length}
+              </span>
+              <OrganizationMenu
+                sort={sort}
+                onSort={(value) => {
+                  setSort(value)
+                  localStorage.setItem("login-sort", value)
+                }}
+                projectId={selected?.id}
+                groups={collections.filter(
+                  (g) =>
+                    !selected || !g.project_id || g.project_id === selected.id
                 )}
-              </LoginHeading>
-              <div className="vault-credentials">
-                <CredentialRow
-                  label="Username"
-                  onCopy={() => void copyCredential(account.email, "Username")}
-                >
-                  {account.email}
-                </CredentialRow>
-                {account.login_type === "password" ? (
-                  <AccountPassword
-                    key={`${account.id}:${account.updated_at}`}
-                    accountId={account.id}
-                  />
-                ) : (
-                  <CredentialRow label="Sign-in method">
-                    Google sign-in
-                  </CredentialRow>
+                group={group}
+                change={setGroup}
+                request={orgRequest}
+                editable={admin}
+                refresh={refreshGroups}
+              />
+              {selected && admin && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Project actions"
+                      />
+                    }
+                  >
+                    <MoreHorizontal />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() =>
+                        setEditor({ kind: "project", project: selected })
+                      }
+                    >
+                      <Pencil />
+                      Edit project
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() =>
+                        setEditor({
+                          kind: "delete",
+                          path: `/api/projects/${selected.id}`,
+                          title: `Delete ${selected.name}?`,
+                        })
+                      }
+                    >
+                      <Trash2 />
+                      Delete project
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+            <ScrollArea className="min-h-0 flex-1">
+              <div className="space-y-1 p-2">
+                {!data && loading
+                  ? Array.from({ length: 5 }, (_, i) => (
+                      <Skeleton key={i} className="mb-2 h-16" />
+                    ))
+                  : accounts.map((a) => {
+                      const p = projects.find((p) => p.id === a.project_id)
+                      return (
+                        <LoginRow
+                          key={a.id}
+                          name={
+                            a.label === a.email ? (p?.name ?? "Login") : a.label
+                          }
+                          username={a.email}
+                          icon={a.icon}
+                          website={accountWebsites(a, p)[0]?.url}
+                          favicon={a.favicon}
+                          draggable={admin && !loading && !moving}
+                          title={
+                            admin
+                              ? "Drag onto a project to move this login"
+                              : undefined
+                          }
+                          onDragStart={(event) => {
+                            event.dataTransfer.setData(
+                              "application/x-devlogin-account",
+                              a.id
+                            )
+                            event.dataTransfer.effectAllowed = "move"
+                            setDraggedId(a.id)
+                          }}
+                          onDragEnd={() => {
+                            setDraggedId(null)
+                            setDropId(null)
+                          }}
+                          aria-pressed={account?.id === a.id}
+                          className={`${draggedId === a.id ? "opacity-50" : ""} ${admin && !moving ? "cursor-grab active:cursor-grabbing" : ""}`}
+                          onClick={() => {
+                            setAccountId(a.id)
+                            setMobilePanel("details")
+                          }}
+                        />
+                      )
+                    })}
+                {data && !accounts.length && (
+                  <div className="px-3 py-8 text-sm text-muted-foreground">
+                    <p>{query ? "No matching logins" : "No logins yet"}</p>
+                    <p className="mt-1 text-xs">
+                      {query
+                        ? "Try a different name, username, or website."
+                        : admin
+                          ? "Use Add Login to save an account."
+                          : "Your administrator can add logins."}
+                    </p>
+                  </div>
                 )}
               </div>
-              <dl className="mt-4 divide-y">
-                <Field label="Websites">
-                  {accountWebsites(account, project).length ? (
-                    accountWebsites(account, project).map((site) => (
-                      <a
-                        key={site.url}
-                        href={
-                          site.login_path
-                            ? new URL(site.login_path, site.url).href
-                            : site.url
-                        }
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center justify-between gap-4 py-1 text-[var(--vault-label)] hover:underline"
-                      >
-                        <span>
-                          {new URL(site.url).host}
-                          {new URL(site.url).pathname.replace(/\/$/, "")}
+            </ScrollArea>
+          </section>
+          <section
+            aria-label="Account details"
+            className={`${panel === "details" ? "flex" : "hidden"} min-w-0 flex-1 flex-col md:flex`}
+          >
+            <div className="vault-pane-bar flex items-center justify-between gap-2 px-4 md:px-6">
+              <div className="flex min-w-0 items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="md:hidden"
+                  aria-label="Back to accounts"
+                  onClick={() => setMobilePanel("accounts")}
+                >
+                  <ArrowLeft />
+                </Button>
+                <span className="truncate text-xs text-muted-foreground">
+                  {project ? `${project.name} / Login` : "Login details"}
+                </span>
+              </div>
+              {account && project && admin && (
+                <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      setEditor({ kind: "account", project, account })
+                    }
+                  >
+                    <Pencil />
+                    Edit
+                  </Button>
+                  <LoginActions
+                    onRefreshIcon={
+                      admin && !account.icon
+                        ? () => onRefreshIcon(account.id)
+                        : undefined
+                    }
+                    onEdit={() =>
+                      setEditor({ kind: "account", project, account })
+                    }
+                    onCopyUsername={() =>
+                      void copyCredential(account.email, "Username")
+                    }
+                    onDelete={() =>
+                      setEditor({
+                        kind: "delete",
+                        path: `/api/accounts/${account.id}`,
+                        title: `Delete ${account.label}?`,
+                      })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+            <ScrollArea className="min-h-0 flex-1">
+              {account && project ? (
+                <div className="vault-detail mx-auto max-w-3xl">
+                  <LoginHeading
+                    title={
+                      account.label === account.email
+                        ? project.name
+                        : account.label
+                    }
+                    icon={account.icon}
+                    website={accountWebsites(account, project)[0]?.url}
+                    favicon={account.favicon}
+                  >
+                    {account.is_default && (
+                      <Badge variant="secondary" className="ml-auto">
+                        Default
+                      </Badge>
+                    )}
+                  </LoginHeading>
+                  <div className="vault-credentials">
+                    <CredentialRow
+                      label="Username"
+                      onCopy={() =>
+                        void copyCredential(account.email, "Username")
+                      }
+                    >
+                      {account.email}
+                    </CredentialRow>
+                    {account.login_type === "password" ? (
+                      <AccountPassword
+                        key={`${account.id}:${account.updated_at}`}
+                        accountId={account.id}
+                      />
+                    ) : (
+                      <CredentialRow label="Sign-in method">
+                        Google sign-in
+                      </CredentialRow>
+                    )}
+                  </div>
+                  <dl className="mt-4 divide-y">
+                    <Field label="Websites">
+                      {accountWebsites(account, project).length ? (
+                        accountWebsites(account, project).map((site) => (
+                          <a
+                            key={site.url}
+                            href={
+                              site.login_path
+                                ? new URL(site.login_path, site.url).href
+                                : site.url
+                            }
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center justify-between gap-4 py-1 text-[var(--vault-label)] hover:underline"
+                          >
+                            <span>
+                              {new URL(site.url).host}
+                              {new URL(site.url).pathname.replace(/\/$/, "")}
+                            </span>
+                            <ExternalLink
+                              aria-label="Open website"
+                              className="size-4 shrink-0"
+                            />
+                          </a>
+                        ))
+                      ) : (
+                        <span className="text-muted-foreground">
+                          No websites configured
                         </span>
-                        <ExternalLink
-                          aria-label="Open website"
-                          className="size-4 shrink-0"
-                        />
-                      </a>
-                    ))
-                  ) : (
-                    <span className="text-muted-foreground">
-                      No websites configured
-                    </span>
-                  )}
-                </Field>
-                {account.tags?.length ? (
-                  <Field label="Tags">{account.tags.join(" · ")}</Field>
-                ) : null}
-                {account.notes && (
-                  <Field label="Notes">
-                    <span className="whitespace-pre-wrap">{account.notes}</span>
-                  </Field>
-                )}
-                <Field label="Project">
-                  <span className="flex items-center gap-2">
-                    <ItemIcon icon={project.icon} folder />
-                    {project.name}
+                      )}
+                    </Field>
+                    {account.tags?.length ? (
+                      <Field label="Tags">{account.tags.join(" · ")}</Field>
+                    ) : null}
+                    {account.notes && (
+                      <Field label="Notes">
+                        <span className="whitespace-pre-wrap">
+                          {account.notes}
+                        </span>
+                      </Field>
+                    )}
+                    <Field label="Project">
+                      <span className="flex items-center gap-2">
+                        <ItemIcon icon={project.icon} folder />
+                        {project.name}
+                      </span>
+                    </Field>
+                  </dl>
+                  <Files key={account.id} accountId={account.id} />
+                  <LoginActivity
+                    key={account.id}
+                    id={account.id}
+                    stamp={account.updated_at}
+                    created={account.created_at}
+                    request={orgRequest}
+                  />
+                </div>
+              ) : selected || query || accountId ? (
+                <div className="library-overview">
+                  <span className="library-emblem">
+                    <List />
                   </span>
-                </Field>
-              </dl>
-              <LoginActivity
-                key={account.id}
-                id={account.id}
-                stamp={account.updated_at}
-                created={account.created_at}
-                request={orgRequest}
-              />
-            </div>
-          ) : (
-            <div className="flex min-h-[55dvh] flex-col items-center justify-center gap-3 p-6 text-center">
-              <KeyRound className="size-8 text-muted-foreground/50" />
-              <h2 className="text-sm font-medium">Select an account</h2>
-              <p className="max-w-64 text-xs text-muted-foreground">
-                Choose a login to view its details and securely copy
-                credentials.
-              </p>
-            </div>
-          )}
-        </ScrollArea>
-      </section>
+                  <h1>Select an account</h1>
+                  <p>{selected?.name ?? "All logins"}</p>
+                </div>
+              ) : (
+                overview("projects")
+              )}
+            </ScrollArea>
+          </section>
+        </>
+      )}
     </div>
   )
 }

@@ -389,6 +389,7 @@ const tools: Tool[] = [
         id: str("Existing collection id"),
         name: str("Collection name"),
         tag: str("Membership tag"),
+        project_id: str("Optional project scope"),
       },
       ["name", "tag"]
     ),
@@ -397,7 +398,7 @@ const tools: Tool[] = [
         "/api/collections" +
           (i.id ? "/" + encodeURIComponent(text(i, "id")) : ""),
         i.id ? "PUT" : "POST",
-        pick(i, ["name", "tag"])
+        pick(i, ["name", "tag", "project_id"])
       ),
   },
   {
@@ -431,10 +432,23 @@ const tools: Tool[] = [
       {
         name: str("Filename"),
         text: str("File contents, maximum 64000 characters"),
+        account_id: str("Optional login id"),
       },
       ["name", "text"]
     ),
     run: (input, api) => api("/api/files/text", "POST", input),
+  },
+  {
+    name: "set_file_login",
+    description:
+      "Attach your private file to a login. Omit account_id to detach it.",
+    inputSchema: obj({ id: str("File id"), account_id: str("Login id") }, [
+      "id",
+    ]),
+    run: (input, api) =>
+      api("/api/files/" + encodeURIComponent(text(input, "id")), "PATCH", {
+        account_id: input.account_id ? text(input, "account_id") : null,
+      }),
   },
   {
     name: "rename_file",

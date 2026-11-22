@@ -6,6 +6,7 @@ import { Input } from "./input"
 import { Popover, PopoverTrigger, PopoverContent } from "./popover"
 type Request = <T>(path: string, method?: string, body?: unknown) => Promise<T>
 export function OrganizationMenu({
+  projectId,
   groups,
   group,
   change,
@@ -15,6 +16,7 @@ export function OrganizationMenu({
   editable,
   refresh,
 }: {
+  projectId?: string
   groups: Collection[]
   group: string
   change: (id: string) => void
@@ -37,7 +39,13 @@ export function OrganizationMenu({
       const row = await request<Collection>(
         "/api/collections" + (editing && current ? "/" + current.id : ""),
         remove ? "DELETE" : editing ? "PUT" : "POST",
-        remove ? undefined : { name, tag: tag || name }
+        remove
+          ? undefined
+          : {
+              name,
+              tag: tag || name,
+              ...(!editing && projectId ? { project_id: projectId } : {}),
+            }
       )
       await refresh()
       change(remove ? "" : row.id)
@@ -111,7 +119,9 @@ export function OrganizationMenu({
         )}
         {editable && (
           <details>
-            <summary>Manage collections</summary>
+            <summary>
+              {projectId ? "Manage project collections" : "Manage collections"}
+            </summary>
             <div className="mt-2 grid gap-2">
               {current && (
                 <Button
