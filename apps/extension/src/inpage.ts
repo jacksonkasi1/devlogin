@@ -19,6 +19,7 @@ const css = `
 :host { all: initial; color-scheme: light dark; }
 * { box-sizing: border-box; }
 .surface { position: fixed; z-index: 2147483647; font: 13px/1.45 Inter, system-ui, sans-serif; color: light-dark(#171717,#fafafa); background:light-dark(#fff,#202020); border:1px solid light-dark(#dedede,#444); border-radius:14px; box-shadow:0 6px 24px #0002; padding:14px; }
+.floating-login {top:12px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;max-width:calc(100vw - 24px);padding:6px 9px;border-radius:24px;background:var(--popover);color:var(--popover-foreground)}.floating-login strong{white-space:nowrap}.floating-login select{min-width:0;max-width:160px;border:0;background:var(--popover);color:inherit}.floating-login button{white-space:nowrap;border-radius:16px;padding:5px 9px}
 button,input,select { font:inherit; color:inherit; } button { cursor:pointer; border:1px solid light-dark(#dedede,#555); background:transparent; border-radius:8px; padding:8px 10px; } button:hover {background:light-dark(#f4f4f5,#303030)} button:disabled {opacity:.6;cursor:wait} button:focus-visible,input:focus-visible,select:focus-visible { outline:2px solid #2563eb; outline-offset:2px; }
 .primary {background:light-dark(#171717,#fafafa);color:light-dark(#fff,#171717);border-color:transparent}.primary:hover {opacity:.9;background:light-dark(#171717,#fafafa)}
 .dropdown {background:var(--popover);color:var(--popover-foreground);border:1px solid var(--border);border-radius:10px;box-shadow:0 5px 16px #0004;padding:4px;overflow:auto;max-height:300px;font-size:13px}
@@ -286,6 +287,70 @@ export function inpage(
     applyTheme()
     position(menu)
     return true
+  }
+  let pill: HTMLElement | undefined
+  let dismissedUrl = ""
+  let pillKey = ""
+  function clearPill() {
+    pill?.remove()
+    pill = undefined
+    pillKey = ""
+  }
+  function floating(context: PageContext | null) {
+    const accounts =
+      context?.accounts.filter((a) => a.login_type === "password") ?? []
+    if (
+      !accounts.length ||
+      dismissedUrl === location.href ||
+      context?.settings.floatingLogin === false
+    ) {
+      clearPill()
+      return
+    }
+    const key = JSON.stringify([
+      location.href,
+      ...accounts.map((a) => [a.id, a.label, a.email]),
+    ])
+    if (pill && key === pillKey) return
+    clearPill()
+    pillKey = key
+    const box = node("section", "", "surface floating-login")
+    box.setAttribute("aria-label", "Global Login saved sign-in")
+    const title = node("strong", "Global Login")
+    const picker = node("select")
+    picker.setAttribute("aria-label", "Choose saved login")
+    for (const account of accounts) {
+      const opt = node("option", account.label + " · " + account.email)
+      opt.value = account.id
+      picker.append(opt)
+    }
+    const use = node("button", "Fill login", "primary")
+    use.type = "button"
+    use.onclick = async (event) => {
+      if (!event.isTrusted || use.disabled) return
+      use.disabled = true
+      try {
+        await fill(
+          await send<Fill>({ type: "suggest-fill", accountId: picker.value })
+        )
+        dismissedUrl = location.href
+        clearPill()
+      } catch {
+        use.textContent = "Retry fill"
+        use.disabled = false
+      }
+    }
+    const close = node("button", "×")
+    close.type = "button"
+    close.setAttribute("aria-label", "Dismiss floating login")
+    close.onclick = () => {
+      dismissedUrl = location.href
+      clearPill()
+    }
+    box.append(title, picker, use, close)
+    shadow.append(box)
+    pill = box
+    applyTheme()
   }
   function showPending(pending: Pending) {
     if (pending.id === promptId) return
@@ -559,6 +624,7 @@ export function inpage(
   document.addEventListener("scroll", reposition, true)
   window.addEventListener("resize", reposition)
   return {
+    floating,
     suggest,
     signup,
     setSettings,

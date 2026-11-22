@@ -1468,3 +1468,21 @@ test("Open and Fill opens the configured website and fills the selected login", 
   await page.close()
   await ui.close()
 })
+
+test("floating login fills a matching form on click and can be dismissed", async () => {
+  const page = await context.newPage()
+  await automatic(false)
+  await page.goto(fixture + "/login")
+  const prompt = page.getByRole("region", {
+    name: "Global Login saved sign-in",
+  })
+  await expect(prompt).toBeVisible()
+  await expect(page.locator("#password")).toHaveValue("")
+  await prompt.getByRole("button", { name: "Dismiss floating login" }).click()
+  await expect(prompt).toHaveCount(0)
+  await page.reload()
+  await prompt.getByRole("button", { name: "Fill login" }).click()
+  await expect(page.locator("#email")).toHaveValue("login@example.com")
+  await expect(prompt).toHaveCount(0)
+  await page.close()
+})

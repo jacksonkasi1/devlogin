@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1 · 2026-11-22
+
+- Added a dismissible floating login chooser on matching password sign-in forms. Toggle it in extension Settings.
+- Prefer larger declared website icons, including Apple touch icons, over small ICO files.
+
 ## 1.1.0 · 2026-11-22
 
 - Restored the Global Login globe and keyhole on the website and browser toolbar. The popup and dashboard share the login list, credential rows, menus and editor.

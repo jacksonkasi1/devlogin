@@ -1,3 +1,4 @@
+import { isLoginPage } from "@workspace/shared"
 import { readOrFillProfile } from "../src/profile-fields"
 import { defineContentScript } from "wxt/utils/define-content-script"
 import { browser } from "wxt/browser"
@@ -61,6 +62,15 @@ export default defineContentScript({
           pageAt = Date.now()
           ui.setSettings(pageContext.settings)
         }
+        const project = pageContext?.project
+        ui.floating(
+          project &&
+            isLoginPage(project, location.href) &&
+            detectForm(project) &&
+            completedUrl !== location.href
+            ? pageContext
+            : null
+        )
         if (completedUrl === location.href) return
         const context = await send<Context>({ type: "context" })
         if (!context) return
@@ -78,6 +88,7 @@ export default defineContentScript({
         await perform(instruction)
       } catch {
         pageContext = null
+        ui.floating(null)
         ui.closeSuggestions()
       } finally {
         busy = false
@@ -201,6 +212,7 @@ export default defineContentScript({
           return
         }
         if (message.type === "ui-settings-changed") {
+          if (message.settings.floatingLogin === false) ui.floating(null)
           ui.setSettings(message.settings)
           if (pageContext) pageContext.settings = message.settings
           return
@@ -241,6 +253,7 @@ export default defineContentScript({
         lastCheck = 0
         pageAt = 0
         pageContext = null
+        ui.floating(null)
         ui.closeSuggestions()
         void tick()
         void pending()

@@ -63,8 +63,8 @@ export function PopupSettings({
         <div className="space-y-2">
           <Label>Excluded websites</Label>
           <p className="text-xs text-muted-foreground">
-            Global Login works on every website. Use “Exclude this website” in the
-            menu to turn it off for one.
+            Global Login works on every website. Use “Exclude this website” in
+            the menu to turn it off for one.
           </p>
           {snapshot?.excluded?.map((value) => (
             <div className="flex items-center gap-2 text-xs" key={value}>
@@ -105,6 +105,22 @@ export function PopupSettings({
           <p className="text-xs text-muted-foreground">
             Submit the form after filling.
           </p>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <Label htmlFor="floating-login">Floating login prompt</Label>
+          <Switch
+            id="floating-login"
+            disabled={busy}
+            checked={snapshot?.settings.floatingLogin !== false}
+            onCheckedChange={(enabled) =>
+              void act(() =>
+                send({
+                  type: "ui-settings",
+                  settings: { floatingLogin: enabled },
+                })
+              )
+            }
+          />
         </div>
         <Label>Appearance</Label>
         <Choice
