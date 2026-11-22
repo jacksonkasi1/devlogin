@@ -10,7 +10,7 @@ test("missing Google favicon falls back to the icon declared by the website", as
     (route) => route.fulfill({ status: 404 })
   )
   await page.route(
-    "https://devlogin.peacockindia.in/api/favicon?url=https%3A%2F%2Fsandbox.vizfleet.com",
+    "http://localhost:8799/api/favicon?url=https%3A%2F%2Fsandbox.vizfleet.com",
     (route) =>
       route.fulfill({
         contentType: "image/svg+xml",
@@ -19,7 +19,8 @@ test("missing Google favicon falls back to the icon declared by the website", as
   )
   await page.goto(backend)
   await page.getByRole("button", { name: "Fixture app 1" }).click()
-  await page.getByRole("button", { name: "Add Login", exact: true }).click()
+  await page.getByRole("button", { name: "Add item", exact: true }).click()
+  await page.getByRole("menuitem", { name: /Login$/ }).click()
   await page
     .getByLabel("Website URL 1", { exact: true })
     .fill("https://sandbox.vizfleet.com/dashboard/login")
@@ -49,7 +50,8 @@ test("website favicon defaults on web creation and persists after clearing an em
   )
   await page.goto(backend)
   await page.getByRole("button", { name: "Fixture app 1" }).click()
-  await page.getByRole("button", { name: "Add Login", exact: true }).click()
+  await page.getByRole("button", { name: "Add item", exact: true }).click()
+  await page.getByRole("menuitem", { name: /Login$/ }).click()
   await page.getByLabel("Title", { exact: true }).fill("Favicon login")
   await page
     .getByLabel("Username / Email", { exact: true })
@@ -212,7 +214,8 @@ test("add, edit and confirmed delete update the selected login and shared API", 
   request,
 }) => {
   await page.goto(backend)
-  await page.getByRole("button", { name: "Add Login", exact: true }).click()
+  await page.getByRole("button", { name: "Add item", exact: true }).click()
+  await page.getByRole("menuitem", { name: /Login$/ }).click()
   await page.getByLabel("Title", { exact: true }).fill("New developer")
   await page
     .getByLabel("Username / Email", { exact: true })
@@ -337,7 +340,7 @@ test("mobile drill-down, back navigation and dark theme", async ({ page }) => {
   await expect(page.locator("html")).toHaveClass(/dark/)
   await page.reload()
   await expect(page.locator("html")).toHaveClass(/dark/)
-  await page.getByRole("button", { name: "DevLogin logins" }).click()
+  await page.getByRole("button", { name: "Global Login logins" }).click()
   await expect(
     page.getByRole("complementary", { name: "Projects" })
   ).toBeVisible()
@@ -350,7 +353,7 @@ test("members retain read access; pending users cannot view credentials", async 
   await request.get(`${backend}/fixture/member`)
   await page.goto(backend)
   await expect(
-    page.getByRole("button", { name: "Add Login", exact: true })
+    page.getByRole("menuitem", { name: "Login", exact: true })
   ).toHaveCount(0)
   await page.getByRole("button", { name: /Fixture account/ }).click()
   await expect(
@@ -537,7 +540,8 @@ test("login editor manages websites, notes, icons and project assignment", async
   await expect(
     page.getByRole("dialog", { name: /^(Add|Edit|Delete) /i })
   ).toBeHidden()
-  await page.getByRole("button", { name: "Add Login", exact: true }).click()
+  await page.getByRole("button", { name: "Add item", exact: true }).click()
+  await page.getByRole("menuitem", { name: /Login$/ }).click()
   await page.getByLabel("Title", { exact: true }).fill("Shared admin")
   await page
     .getByLabel("Username / Email", { exact: true })

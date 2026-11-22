@@ -32,7 +32,7 @@ export function PopupSettings({
         <p className="mt-1 text-xs text-muted-foreground">
           {user
             ? `${user.name} · ${user.email}`
-            : "Connect to your DevLogin backend"}
+            : "Connect to your Global Login backend"}
         </p>
       </div>
       <div className="space-y-4">
@@ -63,7 +63,7 @@ export function PopupSettings({
         <div className="space-y-2">
           <Label>Excluded websites</Label>
           <p className="text-xs text-muted-foreground">
-            DevLogin works on every website. Use “Exclude this website” in the
+            Global Login works on every website. Use “Exclude this website” in the
             menu to turn it off for one.
           </p>
           {snapshot?.excluded?.map((value) => (

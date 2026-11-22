@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react"
 import { apiRequest } from "@workspace/shared"
-import { Copy, Eye, EyeOff } from "lucide-react"
-import { IconAction } from "./workspace-management"
+import { Eye, EyeOff } from "lucide-react"
+import { Button } from "@workspace/ui/components/button"
+import { CredentialRow, copyCredential } from "@workspace/ui/components/vault"
 import { toast } from "@workspace/ui/components/sonner"
 
 export function AccountPassword({ accountId }: { accountId: string }) {
@@ -27,10 +28,8 @@ export function AccountPassword({ accountId }: { accountId: string }) {
         `/api/accounts/${accountId}/password`,
         { method: "POST", body: "{}" }
       )
-      if (copy) {
-        await navigator.clipboard.writeText(result.password)
-        toast.success("Password copied")
-      } else setPassword(result.password)
+      if (copy) await copyCredential(result.password, "Password")
+      else setPassword(result.password)
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Could not retrieve password"
@@ -40,31 +39,25 @@ export function AccountPassword({ accountId }: { accountId: string }) {
     }
   }
   return (
-    <div className="flex items-center justify-between gap-4 py-4">
-      <div className="min-w-0">
-        <dt className="mb-1 text-xs text-muted-foreground">Password</dt>
-        <dd className="font-mono text-sm break-all" aria-label="Password">
-          {password ?? "••••••••••••"}
-        </dd>
-      </div>
-      <div className="flex shrink-0 gap-1">
-        <IconAction
-          label={password === null ? "Show password" : "Hide password"}
+    <CredentialRow
+      label="Password"
+      busy={busy}
+      onCopy={() => void read(true)}
+      action={
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={password === null ? "Show password" : "Hide password"}
           disabled={busy}
           onClick={() =>
             password === null ? void read(false) : setPassword(null)
           }
         >
           {password === null ? <Eye /> : <EyeOff />}
-        </IconAction>
-        <IconAction
-          label="Copy password"
-          disabled={busy}
-          onClick={() => void read(true)}
-        >
-          <Copy />
-        </IconAction>
-      </div>
-    </div>
+        </Button>
+      }
+    >
+      {password ?? "••••••••••••"}
+    </CredentialRow>
   )
 }

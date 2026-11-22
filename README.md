@@ -1,4 +1,4 @@
-# DevLogin
+# Global Login
 
 A single shared internal workspace: Google sign-in, manual user approval, web project/account management, and a Chrome extension for managing and using project credentials. Bun workspaces, Vite/React, WXT, Hono, D1, and Drizzle. No organizations or billing.
 
@@ -113,7 +113,7 @@ bun run dev:extension
 
 Select `http://localhost:8787` as the backend in the extension's Settings. `.env.example` documents the optional `VITE_API_ORIGIN` build override; copy it to `apps/extension/.env` when needed.
 
-## Using DevLogin
+## Using Global Login
 
 - Administrators add, edit, and delete projects/accounts in either the web dashboard or extension. Approved members can view and use credentials and manage their own auto-login preferences. Web forms live in shadcn dialogs; projects filter the login list in the three-panel workspace.
 - Add websites to each login. HTTPS is required except on localhost. Scheme, host, and port match exactly; staging domains must be listed explicitly. URL path prefixes are supported, with the most specific prefix taking precedence. Optional login paths and custom selectors are configured per website in Advanced settings.
@@ -124,13 +124,13 @@ Select `http://localhost:8787` as the backend in the extension's Settings. `.env
 - Google accounts initiate the application's sign-in button. They do not select a Google identity or bypass Google's checks.
 - Automatic attempts run once per page URL, no more than once per minute per tab/project, and pause after three attempts in ten minutes. Manual submissions have a five-second guard. Deleting a selected account disables its auto-login preference.
 - Popup opening, navigation, mutation, and Refresh sync metadata from D1. Content scripts use a 30-second metadata freshness window; password retrieval and automatic submission re-check authenticated access. Passwords are fetched when needed and never cached in extension storage. Revealed passwords hide after 30 seconds.
-- Native/common HTML and React forms are supported. Multi-step identity forms, CAPTCHA, closed shadow roots, and cross-origin iframe forms require manual interaction; DevLogin does not bypass them.
+- Native/common HTML and React forms are supported. Multi-step identity forms, CAPTCHA, closed shadow roots, and cross-origin iframe forms require manual interaction; Global Login does not bypass them.
 
 ### Enable a website and save a login
 
-1. Visit a project website and choose **⋯ → Enable DevLogin on this site** in the popup. Chrome asks for site permission. New HTTPS websites require this explicit grant; the backend and localhost hosts are included for API/local development. Chrome permissions cover the host, while project/account matching still checks the exact scheme and port.
-2. Optionally enable **browser-wide monitoring** in Settings for discovery on other sites. Disable it there anytime. **Exclude this website** disables autofill and capture on that exact origin, including when browser-wide monitoring is on. Google authentication domains and the DevLogin backend are always excluded from capture.
-3. Submit a normal login, signup, change-password, or reset-password form. Administrators receive **Save login to DevLogin?** or **Update password in DevLogin?** if the submitted password differs from the saved credential. Regular users can fill shared accounts but cannot create or update them.
+1. Visit a project website and choose **⋯ → Enable Global Login on this site** in the popup. Chrome asks for site permission. New HTTPS websites require this explicit grant; the backend and localhost hosts are included for API/local development. Chrome permissions cover the host, while project/account matching still checks the exact scheme and port.
+2. Optionally enable **browser-wide monitoring** in Settings for discovery on other sites. Disable it there anytime. **Exclude this website** disables autofill and capture on that exact origin, including when browser-wide monitoring is on. Google authentication domains and the Global Login backend are always excluded from capture.
+3. Submit a normal login, signup, change-password, or reset-password form. Administrators receive **Save login to Global Login?** or **Update password in Global Login?** if the submitted password differs from the saved credential. Regular users can fill shared accounts but cannot create or update them.
 4. Review the website, project, account and masked password. Choose a label, or choose which matching account to update. Choose an existing project or create a new one for an unknown enabled website. Click **Save login** / **Update saved**, or **Not now**.
 5. The shared record syncs immediately. Popup open/Refresh and a 30-second metadata check pick up changes from other clients. The web dashboard refreshes on focus and every 30 seconds while visible.
 
@@ -146,7 +146,7 @@ Administrators can drag a login from the middle list onto another project in the
 
 Click the icon preview or Change Icon for quick choices, then **More emojis** to browse the full bundled catalog with search, categories, and additional results. You can also paste a single emoji, including skin-tone or joined emoji, into the search box and click Use. The shared picker works in the web app and extension; its catalog loads on demand without contacting an emoji service. Data comes from [Unicode's emoji catalog](https://unicode.org/Public/emoji/latest/emoji-test.txt) under the [Unicode data license](packages/ui/src/lib/UNICODE-LICENSE.txt). To update it, run `bun scripts/generate-emoji-data.ts`; the generated data and license are committed to Git.
 
-New logins default to the first website's favicon in the web editor, extension popup, and in-page autofill suggestions. Selecting an emoji or Lucide icon overrides it; **Use website favicon** clears that override and persists when saved. The preview updates while editing websites. Public sites try Google's favicon service (hostname only), then DevLogin discovers the icon declared in the site's public HTML, then `/favicon.ico`. The public lookup reads only the origin's home page, follows only public HTTPS redirects, and limits response size and time. Localhost and private addresses use only their own site. Unavailable icons fall back to a key.
+New logins default to the first website's favicon in the web editor, extension popup, and in-page autofill suggestions. Selecting an emoji or Lucide icon overrides it; **Use website favicon** clears that override and persists when saved. The preview updates while editing websites. Public sites first try declared icons, then Google's hostname lookup and the site's default icon. The public lookup reads only the origin's home page, follows only public HTTPS redirects, and limits response size and time. Localhost and private addresses use only their own site. Unavailable icons fall back to a key.
 
 ## Verification
 
@@ -164,8 +164,30 @@ API tests use a real in-memory SQLite database with every generated migration, a
 
 Verified on 2026-10-12: 19 API/unit/migration tests and 36 Chromium extension/web scenarios passed, along with type checking, lint and web/extension/Worker builds. The navigation save-confirmation regression also passed three consecutive focused checks. Production smoke testing loads the built extension, checks its Cloudflare API connection and allowed OAuth redirect, verifies anonymous access is denied, and reaches Google's real sign-in page. Completing interactive Google account selection is a manual check using your account. The production folder/login migration preserved the existing project, user, and encrypted credential; its website association was backfilled successfully. Production smoke checks passed after deployment.
 
-Ready-to-load Chrome folder: `apps/extension/.output/chrome-mv3`. Packaged archive: `apps/extension/.output/extension-1.0.0-chrome.zip`. Reload the unpacked extension in `chrome://extensions` after updating this folder; enable the desired websites in the popup.
+Ready-to-load Chrome folder: `apps/extension/.output/chrome-mv3`. Packaged archive: `apps/extension/.output/extension-1.1.0-chrome.zip`. Reload the unpacked extension in `chrome://extensions` after updating this folder; enable the desired websites in the popup.
 
 `bun run build` builds the dashboard and extension and performs a Wrangler deployment dry-run. `bun run deploy` builds the dashboard, applies production migrations, and deploys the Worker plus static assets. `bun run extension:zip` creates the installable extension archive.
 
 Relevant docs: [Google web OAuth](https://developers.google.com/identity/protocols/oauth2/web-server), [Chrome launchWebAuthFlow](https://developer.chrome.com/docs/extensions/reference/api/identity#method-launchWebAuthFlow), [Workers static-asset routing](https://developers.cloudflare.com/workers/static-assets/routing/advanced/).
+
+## Global Login 1.1
+
+Use **Add item** for logins and private items. **My private vault** contains identities, cards, developer credentials and standalone notes. **File attachments** accepts any file type up to 50 MiB per file. Upload a file there, then select it in a Document item. Private items and attachments belong to the signed-in user.
+
+Open **Collections and sort order** beside the login count. Give a collection a name and a membership tag, then add that tag to a login or project. One login can appear in multiple collections. Expand **Activity** on a login to see changes recorded since this release. Each MCP token identifies its owner.
+
+In Claude, for example: “Create a Platform collection for the platform tag, tag these three logins, then refetch every favicon.” The refetch tool returns a cursor for the next page. Browser permissions and the active tab remain local controls.
+
+- [What’s new](apps/web/public/releases.html)
+- [Changelog](CHANGELOG.md)
+- [Self-hosting and upgrades](SELF_HOSTING.md)
+
+### Chrome Web Store screenshots
+
+These 1280 × 800 PNGs use an isolated demonstration vault with masked identifiers.
+
+![Global Login browser vault](apps/web/public/store/vault.png)
+
+![Global Login welcome](apps/web/public/store/welcome.png)
+
+![Global Login item categories](apps/web/public/store/categories.png)

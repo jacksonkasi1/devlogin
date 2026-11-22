@@ -1,3 +1,7 @@
+import { Files } from "./components/files"
+import type { PersonalKind } from "@workspace/shared"
+import { VaultTools } from "@workspace/ui/components/private-vault"
+import { ItemMenu } from "@workspace/ui/components/item-menu"
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
   ApiError,
@@ -31,17 +35,8 @@ import {
   ProjectsView,
   type Editor,
 } from "./components/workspace-management"
-import {
-  KeyRound,
-  Search,
-  Plus,
-  Settings,
-  Users,
-  LogOut,
-  RefreshCw,
-  Bot,
-} from "lucide-react"
-import { Input } from "@workspace/ui/components/input"
+import { KeyRound, Settings, Users, LogOut, RefreshCw, Bot } from "lucide-react"
+import { VaultMark, VaultSearch } from "@workspace/ui/components/vault"
 import {
   Avatar,
   AvatarImage,
@@ -61,6 +56,13 @@ import { McpPage } from "./components/mcp-page"
 import { BackupPanel } from "./components/backup-panel"
 import { Switch } from "@workspace/ui/components/switch"
 
+import { refreshWebsiteIcons, type RefreshPage } from "@workspace/shared"
+
+const personalRequest = <T,>(path: string, method = "GET", body?: unknown) =>
+  apiRequest<T>("", path, {
+    method,
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  })
 const api = <T,>(path: string, options?: RequestInit) =>
   apiRequest<T>("", path, options)
 export function App() {
@@ -71,7 +73,11 @@ export function App() {
   const [error, setError] = useState("")
   const [editor, setEditor] = useState<Editor>(null)
   const [selected, setSelected] = useState<Project | null>(null)
-  const [tab, setTab] = useState("projects")
+  const [tool, setTool] = useState<PersonalKind | "generator">()
+  const [toolKey, setToolKey] = useState(0)
+  const [tab, setTab] = useState(
+    location.hash === "#files" ? "files" : "projects"
+  )
   const [search, setSearch] = useState("")
   const [accountId, setAccountId] = useState<string | null>(null)
   const [moving, setMoving] = useState(false)
@@ -113,7 +119,9 @@ export function App() {
       if (failure instanceof ApiError && failure.status === 401) setUser(null)
       else
         setError(
-          failure instanceof Error ? failure.message : "Could not load DevLogin"
+          failure instanceof Error
+            ? failure.message
+            : "Could not load Global Login"
         )
     } finally {
       setLoading(false)
@@ -140,6 +148,24 @@ export function App() {
       window.removeEventListener("focus", focus)
     }
   }, [reload, refresh])
+  async function refetchIcons(id?: string) {
+    try {
+      const message = await refreshWebsiteIcons(
+        (body) =>
+          api<RefreshPage>("/api/favicons/refresh", {
+            method: "POST",
+            body: JSON.stringify(body),
+          }),
+        id
+      )
+      await refresh()
+      toast.success(message)
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Icon refresh failed"
+      )
+    }
+  }
   async function signOut() {
     try {
       await api("/api/auth/logout", { method: "POST", body: "{}" })
@@ -230,7 +256,10 @@ export function App() {
         </div>
         <Card className="w-full max-w-sm">
           <CardHeader>
-            <CardTitle>DevLogin</CardTitle>
+            <VaultMark />
+            <CardTitle className="mt-3 text-2xl font-semibold">
+              Global Login
+            </CardTitle>
             <CardDescription>
               Your internal project logins, in one place.
             </CardDescription>
@@ -247,7 +276,7 @@ export function App() {
               disabled={loading}
               onClick={() => void signIn()}
             >
-              {loading ? "Loadingâ€¦" : "Continue with Google"}
+              {loading ? "Loading…" : "Continue with Google"}
             </Button>
             {error && (
               <Button variant="outline" onClick={reload}>
@@ -280,7 +309,7 @@ export function App() {
             {notice}
             <div className="flex gap-2">
               <Button disabled={loading} onClick={reload}>
-                {loading ? "Checkingâ€¦" : "Check approval"}
+                {loading ? "Checking…" : "Check approval"}
               </Button>
               <Button variant="outline" onClick={() => void signOut()}>
                 Sign out
@@ -294,21 +323,17 @@ export function App() {
   return (
     <TooltipProvider delay={300}>
       <main className="flex h-dvh flex-col overflow-hidden">
-        <header className="flex shrink-0 flex-wrap items-center gap-3 border-b px-4 py-3 md:gap-5">
+        <header className="vault-header flex flex-wrap items-center gap-3 px-4 py-2 md:gap-5">
           <button
             className="flex items-center gap-2 font-semibold md:w-[170px] lg:w-[212px]"
             onClick={() => setTab("projects")}
-            aria-label="DevLogin logins"
+            aria-label="Global Login logins"
           >
-            <KeyRound className="size-5" />
-            DevLogin
+            <VaultMark />
+            Global Login
           </button>
-          <div className="relative order-last w-full md:order-none md:max-w-xl md:flex-1">
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              aria-label="Search logins"
-              placeholder="Search logins…"
-              className="h-9 rounded-md pl-9"
+          <div className="order-last w-full md:order-none md:max-w-xl md:flex-1">
+            <VaultSearch
               value={search}
               onChange={(event) => {
                 setSearch(event.target.value)
@@ -319,24 +344,23 @@ export function App() {
           </div>
           <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />
-            {canEdit && (
-              <Button
-                className="rounded-md"
-                disabled={!data || loading}
-                onClick={() =>
-                  setEditor(
-                    data?.projects.length
-                      ? { kind: "account", project: selected ?? undefined }
-                      : { kind: "project" }
-                  )
-                }
-              >
-                <Plus />
-                <span>
-                  {data && !data.projects.length ? "Add Project" : "Add Login"}
-                </span>
-              </Button>
-            )}
+            <ItemMenu
+              onLogin={
+                canEdit
+                  ? () =>
+                      setEditor(
+                        data?.projects.length
+                          ? { kind: "account", project: selected ?? undefined }
+                          : { kind: "project" }
+                      )
+                  : undefined
+              }
+              onCategory={(kind) => {
+                setTool(kind)
+                setToolKey((key) => key + 1)
+                setTab("tools")
+              }}
+            />
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
@@ -369,6 +393,27 @@ export function App() {
                     Users
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuItem
+                  onClick={() => {
+                    setTool("generator")
+                    setToolKey((k) => k + 1)
+                    setTab("tools")
+                  }}
+                >
+                  Tools · Password generator
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setTool(undefined)
+                    setToolKey((k) => k + 1)
+                    setTab("tools")
+                  }}
+                >
+                  My private vault
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTab("files")}>
+                  File attachments
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setTab("mcp")}>
                   <Bot />
                   MCP
@@ -377,11 +422,22 @@ export function App() {
                   <Settings />
                   Settings
                 </DropdownMenuItem>
+                {canEdit && (
+                  <DropdownMenuItem onClick={() => void refetchIcons()}>
+                    <RefreshCw />
+                    Refetch all favicons
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem disabled={loading} onClick={reload}>
                   <RefreshCw />
                   {loading ? "Refreshing…" : "Refresh"}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => location.assign("/releases.html")}
+                >
+                  What’s new
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => void signOut()}>
                   <LogOut />
                   Sign out
@@ -425,6 +481,8 @@ export function App() {
               mobilePanel={mobilePanel}
               setMobilePanel={setMobilePanel}
               moving={moving}
+              refreshGroups={refresh}
+              onRefreshIcon={(id) => void refetchIcons(id)}
               onMove={(account, project) => void moveLogin(account, project)}
             />
           </TabsContent>
@@ -536,6 +594,16 @@ export function App() {
               </Table>
             </TabsContent>
           )}
+          <TabsContent value="tools" className="min-h-0 overflow-auto">
+            <VaultTools
+              key={toolKey}
+              request={personalRequest}
+              initial={tool}
+            />
+          </TabsContent>
+          <TabsContent value="files" className="min-h-0 overflow-auto">
+            <Files />
+          </TabsContent>
           <TabsContent value="mcp" className="min-h-0 overflow-auto p-4 md:p-8">
             <McpPage user={user} />
           </TabsContent>
@@ -547,7 +615,7 @@ export function App() {
               <CardHeader>
                 <CardTitle>Settings</CardTitle>
                 <CardDescription>
-                  {user.name} Â· {user.email}
+                  {user.name} · {user.email}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">

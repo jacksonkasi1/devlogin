@@ -11,6 +11,7 @@ export function forbidden(
       ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)
     ) ||
     url.origin === backend ||
+    url.hostname === "globallogin.peacockindia.in" ||
     excluded.includes(url.origin) ||
     /(^|\.)(google\.com|googleapis\.com|gstatic\.com)$/.test(url.hostname)
   )

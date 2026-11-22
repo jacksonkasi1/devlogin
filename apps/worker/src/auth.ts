@@ -108,7 +108,14 @@ export const safeMutation: MiddlewareHandler<AppEnv> = async (c, next) => {
       )
         return c.json({ error: "Invalid request origin" }, 403)
     }
-    if (!c.req.header("Content-Type")?.includes("application/json"))
+    if (
+      !(
+        c.req.path === "/api/files" &&
+        c.req.method === "POST" &&
+        c.req.header("Content-Type") === "application/octet-stream"
+      ) &&
+      !c.req.header("Content-Type")?.includes("application/json")
+    )
       return c.json({ error: "JSON request required" }, 415)
   }
   await next()

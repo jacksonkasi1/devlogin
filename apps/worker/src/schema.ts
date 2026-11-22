@@ -5,7 +5,7 @@ import {
   primaryKey,
   uniqueIndex,
 } from "drizzle-orm/sqlite-core"
-import type { Project, Website } from "@workspace/shared"
+import type { Project, Website, WebsiteIcon } from "@workspace/shared"
 const timestamps = {
   created_at: text().notNull(),
   updated_at: text().notNull(),
@@ -58,6 +58,7 @@ export const exchanges = sqliteTable("exchanges", {
 export const projects = sqliteTable("projects", {
   id: text().primaryKey(),
   name: text().notNull(),
+  tags: text({ mode: "json" }).$type<string[]>().notNull().default([]),
   icon: text().notNull().default(""),
   description: text().notNull(),
   urls: text({ mode: "json" }).$type<string[]>().notNull(),
@@ -73,11 +74,13 @@ export const accounts = sqliteTable(
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
     label: text().notNull(),
+    tags: text({ mode: "json" }).$type<string[]>().notNull().default([]),
     icon: text().notNull().default(""),
     notes: text().notNull().default(""),
     websites: text({ mode: "json" }).$type<Website[]>(),
     email: text().notNull(),
     environment: text().notNull().default(""),
+    favicon: text({ mode: "json" }).$type<WebsiteIcon>(),
     encrypted_password: text(),
     login_type: text({ enum: ["password", "google"] }).notNull(),
     is_default: integer({ mode: "boolean" }).notNull(),
@@ -104,3 +107,39 @@ export const preferences = sqliteTable(
   (t) => [primaryKey({ columns: [t.user_id, t.project_id] })]
 )
 import { sql } from "drizzle-orm"
+
+export const personalItems = sqliteTable("personal_items", {
+  id: text().primaryKey(),
+  owner_id: text()
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  kind: text().$type<import("@workspace/shared").PersonalKind>().notNull(),
+  title: text().notNull(),
+  icon: text().notNull().default(""),
+  tags: text({ mode: "json" }).$type<string[]>().notNull().default([]),
+  encrypted_fields: text().notNull(),
+})
+
+export const attachments = sqliteTable("attachments", {
+  id: text().primaryKey(),
+  owner_id: text()
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text().notNull(),
+  size: integer().notNull(),
+  created_at: text().notNull(),
+})
+export const collections = sqliteTable("collections", {
+  id: text().primaryKey(),
+  name: text().notNull().unique(),
+  tag: text().notNull(),
+})
+export const activities = sqliteTable("activities", {
+  id: integer().primaryKey({ autoIncrement: true }),
+  item_id: text().notNull(),
+  actor: text().notNull(),
+  source: text().notNull(),
+  action: text().notNull(),
+  fields: text({ mode: "json" }).$type<string[]>().notNull(),
+  at: text().notNull(),
+})

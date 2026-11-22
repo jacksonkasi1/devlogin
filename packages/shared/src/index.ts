@@ -2,6 +2,10 @@ import { z } from "zod"
 
 // Share favicon selection between the dashboard, popup and in-page suggestions.
 // Never send paths, queries or local hostnames to the public fallback service.
+let iconBackend = "https://devlogin.peacockindia.in"
+export function configureIconBackend(origin: string) {
+  iconBackend = new URL(origin).origin
+}
 export function websiteFavicons(website?: string): string[] {
   if (!website) return []
   try {
@@ -17,13 +21,43 @@ export function websiteFavicons(website?: string): string[] {
     return local
       ? [direct]
       : [
+          `${iconBackend}/api/favicon?url=${encodeURIComponent(url.origin)}`,
           `https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=64`,
-          `https://devlogin.peacockindia.in/api/favicon?url=${encodeURIComponent(url.origin)}`,
           direct,
         ]
   } catch {
     return []
   }
+}
+
+export type WebsiteIcon = { origin: string; url: string; revision: string }
+export const tagsSchema = z
+  .array(z.string().trim().min(1).max(48))
+  .max(32)
+  .transform((tags) => [
+    ...new Map(tags.map((tag) => [tag.toLowerCase(), tag])).values(),
+  ])
+  .optional()
+
+export type RefreshPage = {
+  refreshed: number
+  skipped: number
+  next: string | null
+}
+export async function refreshWebsiteIcons(
+  request: (body: { id?: string; after?: string }) => Promise<RefreshPage>,
+  id?: string
+) {
+  let after: string | undefined
+  let refreshed = 0,
+    skipped = 0
+  do {
+    const page = await request({ id, after })
+    refreshed += page.refreshed
+    skipped += page.skipped
+    after = page.next ?? undefined
+  } while (after)
+  return `Refreshed ${refreshed} website icons${skipped ? `, ${skipped} unavailable` : ""}`
 }
 
 const applicationUrl = z
@@ -53,6 +87,7 @@ export const selectorsSchema = z.object({
   google: z.string().max(500).default(""),
 })
 export const projectSchema = z.object({
+  tags: tagsSchema,
   name: z.string().trim().min(1).max(120),
   description: z.string().max(1000).default(""),
   icon: z.string().max(32).optional(),
@@ -102,6 +137,7 @@ export const websiteSchema = z.object({
 })
 export type Website = z.infer<typeof websiteSchema>
 export const accountSchema = z.object({
+  tags: tagsSchema,
   project_id: z.string().min(1),
   label: z.string().trim().min(1).max(120),
   icon: z.string().max(32).optional(),
@@ -142,6 +178,7 @@ export type Project = z.infer<typeof projectSchema> & {
   updated_at: string
 }
 export type Account = Omit<z.infer<typeof accountSchema>, "password"> & {
+  favicon?: WebsiteIcon | null
   id: string
   created_at: string
   updated_at: string
@@ -232,6 +269,7 @@ export function siteProjects(data: Sync, address?: string): Project[] {
 }
 export type Preference = z.infer<typeof preferenceSchema>
 export type Sync = {
+  collections?: Collection[]
   projects: Project[]
   accounts: Account[]
   preferences: Preference[]
@@ -309,4 +347,211 @@ export async function apiRequest<T>(
   if (!response.ok)
     throw new ApiError(data.error ?? "Request failed", response.status)
   return data
+}
+
+export const personalKinds = [
+  "card",
+  "profile",
+  "api",
+  "note",
+  "document",
+  "bank",
+  "wallet",
+  "database",
+  "driver",
+  "email",
+  "medical",
+  "membership",
+  "outdoor",
+  "passport",
+  "password",
+  "reward",
+  "server",
+  "ssn",
+  "software",
+  "ssh",
+  "router",
+] as const
+export const categoryNames = {
+  card: "Credit Card",
+  profile: "Identity",
+  api: "API Credential",
+  note: "Secure Note",
+  document: "Document",
+  bank: "Bank Account",
+  wallet: "Crypto Wallet",
+  database: "Database",
+  driver: "Driver License",
+  email: "Email Account",
+  medical: "Medical Record",
+  membership: "Membership",
+  outdoor: "Outdoor License",
+  passport: "Passport",
+  password: "Password",
+  reward: "Reward Program",
+  server: "Server",
+  ssn: "Social Security Number",
+  software: "Software License",
+  ssh: "SSH Key",
+  router: "Wireless Router",
+}
+export type PersonalKind = (typeof personalKinds)[number]
+export const personalFields: Record<PersonalKind, Record<string, string>> = {
+  profile: {
+    name: "Full name",
+    "given-name": "First name",
+    "family-name": "Last name",
+    email: "Email",
+    tel: "Phone",
+    "street-address": "Street address",
+    "address-level2": "City",
+    "address-level1": "State / region",
+    "postal-code": "Postal code",
+    "country-name": "Country",
+    organization: "Organization",
+  },
+  card: {
+    "cc-name": "Name on card",
+    "cc-number": "Card number",
+    "cc-exp": "Expiry (MM/YY)",
+  },
+  note: { content: "Secure note" },
+  api: {
+    service: "Service",
+    username: "Username",
+    token: "API key",
+    url: "Endpoint",
+  },
+  document: {
+    filename: "Filename",
+    attachment: "Attachment",
+    content: "Notes",
+  },
+  bank: {
+    bank: "Bank",
+    holder: "Account holder",
+    number: "Account number",
+    routing: "Routing / SWIFT",
+  },
+  wallet: { network: "Network", address: "Wallet address", notes: "Notes" },
+  database: {
+    host: "Host",
+    database: "Database name",
+    username: "Username",
+    password: "Password",
+    port: "Port",
+  },
+  driver: {
+    name: "Name",
+    number: "License number",
+    issuer: "Issuing authority",
+    expires: "Expiry",
+  },
+  email: { email: "Email", password: "Password", host: "Mail server" },
+  medical: { provider: "Provider", record: "Record" },
+  membership: {
+    organization: "Organization",
+    member: "Member number",
+    expires: "Expiry",
+  },
+  outdoor: { license: "License number", issuer: "Issuer", expires: "Expiry" },
+  passport: {
+    number: "Passport number",
+    name: "Name",
+    country: "Country",
+    expires: "Expiry",
+  },
+  password: { password: "Password", url: "Website" },
+  reward: { program: "Program", member: "Member number" },
+  server: {
+    host: "Host",
+    username: "Username",
+    password: "Password",
+    port: "Port",
+  },
+  ssn: { name: "Name", number: "Number" },
+  software: {
+    product: "Product",
+    key: "License key",
+    email: "Registered email",
+  },
+  ssh: {
+    public: "Public key",
+    private: "Private key",
+    passphrase: "Passphrase",
+  },
+  router: {
+    ssid: "Network name",
+    password: "Wireless password",
+    address: "Router address",
+  },
+}
+export const personalSchema = z
+  .object({
+    kind: z.enum(personalKinds),
+    title: z.string().trim().min(1).max(120),
+    icon: z.string().max(32).default(""),
+    tags: tagsSchema,
+    fields: z.record(z.string(), z.string().max(32000)),
+  })
+  .strict()
+  .refine(
+    (item) =>
+      Object.keys(item.fields).every((key) =>
+        Object.hasOwn(personalFields[item.kind], key)
+      ),
+    "Unknown field for this item"
+  )
+export type PersonalItem = z.infer<typeof personalSchema> & { id: string }
+export type PersonalSummary = Omit<PersonalItem, "fields">
+
+export function generatePassword(length = 24) {
+  const alphabet =
+    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*-_"
+  const size = Math.min(128, Math.max(16, Math.floor(length) || 24))
+  const limit = 256 - (256 % alphabet.length)
+  let password = ""
+  while (password.length < size)
+    for (const value of crypto.getRandomValues(new Uint8Array(size))) {
+      if (value < limit && password.length < size)
+        password += alphabet[value % alphabet.length]
+    }
+  return password
+}
+export type Collection = { id: string; name: string; tag: string }
+export function groupsFor(
+  account: Account,
+  project: Project | undefined,
+  groups: Collection[] = []
+) {
+  const tags = new Set(
+    [...(account.tags ?? []), ...(project?.tags ?? [])].map((s) =>
+      s.toLowerCase()
+    )
+  )
+  return groups.filter((g) => tags.has(g.tag.toLowerCase()))
+}
+export type SortOrder = "priority" | "newest" | "oldest" | "updated" | "name"
+export function orderLogins(
+  items: Account[],
+  order: SortOrder,
+  score: (a: Account) => number = () => 0
+) {
+  return [...items].sort((a, b) => {
+    if (order === "priority") {
+      const diff =
+        score(b) - score(a) || Number(b.is_default) - Number(a.is_default)
+      if (diff) return diff
+    }
+    if (order === "updated")
+      return (
+        b.updated_at.localeCompare(a.updated_at) || a.id.localeCompare(b.id)
+      )
+    if (order === "newest" || order === "oldest")
+      return (
+        (order === "newest" ? -1 : 1) *
+          a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)
+      )
+    return a.label.localeCompare(b.label) || a.id.localeCompare(b.id)
+  })
 }

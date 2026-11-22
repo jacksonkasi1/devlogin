@@ -1,3 +1,8 @@
+import { groupsFor, orderLogins, type SortOrder } from "@workspace/shared"
+import {
+  OrganizationMenu,
+  LoginActivity,
+} from "@workspace/ui/components/organization"
 import { useState, type ReactNode } from "react"
 import {
   apiRequest,
@@ -8,7 +13,6 @@ import {
 } from "@workspace/shared"
 import {
   ArrowLeft,
-  Copy,
   ExternalLink,
   KeyRound,
   MoreHorizontal,
@@ -54,9 +58,21 @@ import {
   AccountEditor,
 } from "@workspace/ui/components/credential-editors"
 import { ItemIcon } from "@workspace/ui/components/item-icon"
+import {
+  CredentialRow,
+  LoginActions,
+  LoginHeading,
+  LoginRow,
+  copyCredential,
+} from "@workspace/ui/components/vault"
 import { AccountPassword } from "./account-password"
 import { toast } from "@workspace/ui/components/sonner"
 
+const orgRequest = <T,>(path: string, method = "GET", body?: unknown) =>
+  apiRequest<T>("", path, {
+    method,
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  })
 export type Editor =
   | { kind: "project"; project?: Project }
   | { kind: "account"; project?: Project; account?: Account }
@@ -138,7 +154,7 @@ export function ManagementDialogs({
       }}
     >
       <DialogContent
-        className="max-h-[85dvh] overflow-y-auto sm:max-w-[540px]"
+        className={`vault-editor-dialog max-h-[85dvh] sm:max-w-[500px] ${editor?.kind === "account" ? "vault-login-dialog" : "overflow-y-auto"}`}
         showCloseButton={!busy}
       >
         <DialogHeader>
@@ -157,7 +173,7 @@ export function ManagementDialogs({
               : "Organize your logins in a project."}
           </DialogDescription>
         </DialogHeader>
-        <fieldset disabled={busy} className="min-w-0 space-y-3">
+        <fieldset disabled={busy} className="vault-editor-fieldset">
           {editor?.kind === "project" && (
             <ProjectEditor
               key={editor.project?.id ?? "new"}
@@ -246,7 +262,7 @@ function Field({
   return (
     <div className="flex min-w-0 items-center justify-between gap-4 py-4">
       <div className="min-w-0">
-        <dt className="mb-1 text-xs text-muted-foreground">{label}</dt>
+        <dt className="vault-field-label">{label}</dt>
         <dd className="text-sm break-all">{children}</dd>
       </div>
       <div className="flex shrink-0 gap-1">{actions}</div>
@@ -267,6 +283,8 @@ export function ProjectsView({
   mobilePanel,
   setMobilePanel,
   moving,
+  refreshGroups,
+  onRefreshIcon,
   onMove,
 }: {
   data: Sync | null
@@ -281,8 +299,14 @@ export function ProjectsView({
   mobilePanel: "projects" | "accounts" | "details"
   setMobilePanel: (panel: "projects" | "accounts" | "details") => void
   moving: boolean
+  refreshGroups: () => Promise<unknown>
+  onRefreshIcon: (id: string) => void
   onMove: (account: Account, project: Project) => void
 }) {
+  const [group, setGroup] = useState("")
+  const [sort, setSort] = useState<SortOrder>(
+    () => (localStorage.getItem("login-sort") as SortOrder) ?? "priority"
+  )
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dropId, setDropId] = useState<string | null>(null)
   const projects = data?.projects ?? []
@@ -290,13 +314,34 @@ export function ProjectsView({
   const canDrop = (p: Project) =>
     admin && !loading && !moving && !!dragged && dragged.project_id !== p.id
   const query = search.trim().toLowerCase()
-  const accounts = (data?.accounts ?? []).filter(
+  const filtered = (data?.accounts ?? []).filter(
     (a) =>
+      (!group ||
+        groupsFor(
+          a,
+          projects.find((p) => p.id === a.project_id),
+          data?.collections
+        ).some((g) => g.id === group)) &&
       (!selected || a.project_id === selected.id) &&
-      `${a.label} ${a.email} ${a.environment} ${projects.find((p) => p.id === a.project_id)?.name ?? ""}`
+      `${groupsFor(
+        a,
+        projects.find((p) => p.id === a.project_id),
+        data?.collections
+      )
+        .map((g) => g.name)
+        .join(
+          " "
+        )} ${a.label} ${a.email} ${(a.tags ?? []).join(" ")} ${(projects.find((p) => p.id === a.project_id)?.tags ?? []).join(" ")} ${accountWebsites(
+        a
+      )
+        .map((s) => s.url)
+        .join(
+          " "
+        )} ${a.environment} ${projects.find((p) => p.id === a.project_id)?.name ?? ""}`
         .toLowerCase()
         .includes(query)
   )
+  const accounts = orderLogins(filtered, sort)
   const account = accounts.find((a) => a.id === accountId)
   const project = projects.find((p) => p.id === account?.project_id)
   const panel = mobilePanel
@@ -313,10 +358,8 @@ export function ProjectsView({
         aria-label="Projects"
         className={`${panel === "projects" ? "flex" : "hidden"} w-full shrink-0 flex-col border-r bg-sidebar md:flex md:w-[190px] lg:w-[232px]`}
       >
-        <div className="flex h-14 shrink-0 items-center justify-between px-4">
-          <h2 className="text-xs font-medium tracking-wide text-muted-foreground">
-            PROJECTS
-          </h2>
+        <div className="vault-pane-bar flex items-center justify-between px-4">
+          <h2 className="text-sm font-semibold">Projects</h2>
           {admin && (
             <IconAction
               label="Add Project"
@@ -405,7 +448,7 @@ export function ProjectsView({
         aria-label="Accounts"
         className={`${panel === "accounts" ? "flex" : "hidden"} w-full shrink-0 flex-col border-r md:flex md:w-[280px] lg:w-[320px]`}
       >
-        <div className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+        <div className="vault-pane-bar flex items-center gap-2 px-4">
           <Button
             variant="ghost"
             size="icon-sm"
@@ -416,11 +459,26 @@ export function ProjectsView({
             <ArrowLeft />
           </Button>
           <h2 className="min-w-0 flex-1 truncate text-sm font-medium">
-            {selected?.name ?? "All Logins"}
+            {data?.collections?.find((g) => g.id === group)?.name ??
+              selected?.name ??
+              "All Logins"}
           </h2>
           <span className="text-xs text-muted-foreground">
             {accounts.length}
           </span>
+          <OrganizationMenu
+            sort={sort}
+            onSort={(value) => {
+              setSort(value)
+              localStorage.setItem("login-sort", value)
+            }}
+            groups={data?.collections ?? []}
+            group={group}
+            change={setGroup}
+            request={orgRequest}
+            editable={admin}
+            refresh={refreshGroups}
+          />
           {selected && admin && (
             <DropdownMenu>
               <DropdownMenuTrigger
@@ -469,8 +527,15 @@ export function ProjectsView({
               : accounts.map((a) => {
                   const p = projects.find((p) => p.id === a.project_id)
                   return (
-                    <button
+                    <LoginRow
                       key={a.id}
+                      name={
+                        a.label === a.email ? (p?.name ?? "Login") : a.label
+                      }
+                      username={a.email}
+                      icon={a.icon}
+                      website={accountWebsites(a, p)[0]?.url}
+                      favicon={a.favicon}
                       draggable={admin && !loading && !moving}
                       title={
                         admin
@@ -490,26 +555,12 @@ export function ProjectsView({
                         setDropId(null)
                       }}
                       aria-pressed={account?.id === a.id}
-                      className={`${row} py-3 ${account?.id === a.id ? "bg-accent ring-1 ring-border ring-inset" : ""} ${draggedId === a.id ? "opacity-50" : ""} ${admin && !moving ? "cursor-grab active:cursor-grabbing" : ""}`}
+                      className={`${draggedId === a.id ? "opacity-50" : ""} ${admin && !moving ? "cursor-grab active:cursor-grabbing" : ""}`}
                       onClick={() => {
                         setAccountId(a.id)
                         setMobilePanel("details")
                       }}
-                    >
-                      <ItemIcon
-                        key={`${a.icon}:${a.websites?.[0]?.url}`}
-                        icon={a.icon}
-                        website={accountWebsites(a, p)[0]?.url}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium">
-                          {a.label === a.email ? (p?.name ?? "Login") : a.label}
-                        </span>
-                        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                          {a.email}
-                        </span>
-                      </span>
-                    </button>
+                    />
                   )
                 })}
             {data && !accounts.length && (
@@ -531,7 +582,7 @@ export function ProjectsView({
         aria-label="Account details"
         className={`${panel === "details" ? "flex" : "hidden"} min-w-0 flex-1 flex-col md:flex`}
       >
-        <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4 md:px-6">
+        <div className="vault-pane-bar flex items-center justify-between gap-2 px-4 md:px-6">
           <div className="flex min-w-0 items-center gap-2">
             <Button
               variant="ghost"
@@ -556,90 +607,63 @@ export function ProjectsView({
                 <Pencil />
                 Edit
               </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="Login actions"
-                    />
-                  }
-                >
-                  <MoreHorizontal />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onClick={() =>
-                      setEditor({
-                        kind: "delete",
-                        path: `/api/accounts/${account.id}`,
-                        title: `Delete ${account.label}?`,
-                      })
-                    }
-                  >
-                    <Trash2 />
-                    Delete login
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <LoginActions
+                onRefreshIcon={
+                  admin && !account.icon
+                    ? () => onRefreshIcon(account.id)
+                    : undefined
+                }
+                onEdit={() => setEditor({ kind: "account", project, account })}
+                onCopyUsername={() =>
+                  void copyCredential(account.email, "Username")
+                }
+                onDelete={() =>
+                  setEditor({
+                    kind: "delete",
+                    path: `/api/accounts/${account.id}`,
+                    title: `Delete ${account.label}?`,
+                  })
+                }
+              />
             </div>
           )}
         </div>
         <ScrollArea className="min-h-0 flex-1">
           {account && project ? (
-            <div className="mx-auto max-w-3xl p-6 lg:p-10">
-              <div className="mb-8 flex items-center gap-4">
-                <ItemIcon
-                  key={`${account.icon}:${account.websites?.[0]?.url}`}
-                  icon={account.icon}
-                  website={accountWebsites(account, project)[0]?.url}
-                  large
-                />
-                <div className="min-w-0">
-                  <h1 className="text-xl font-semibold break-words">
-                    {account.label === account.email
-                      ? project.name
-                      : account.label}
-                  </h1>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {project.name}
-                  </p>
-                </div>
+            <div className="vault-detail mx-auto max-w-3xl">
+              <LoginHeading
+                title={
+                  account.label === account.email ? project.name : account.label
+                }
+                icon={account.icon}
+                website={accountWebsites(account, project)[0]?.url}
+                favicon={account.favicon}
+              >
                 {account.is_default && (
                   <Badge variant="secondary" className="ml-auto">
                     Default
                   </Badge>
                 )}
-              </div>
-              <dl className="divide-y border-y">
-                <Field
+              </LoginHeading>
+              <div className="vault-credentials">
+                <CredentialRow
                   label="Username"
-                  actions={
-                    <IconAction
-                      label="Copy username"
-                      onClick={() =>
-                        void navigator.clipboard.writeText(account.email).then(
-                          () => toast.success("Username copied"),
-                          () => toast.error("Clipboard unavailable")
-                        )
-                      }
-                    >
-                      <Copy />
-                    </IconAction>
-                  }
+                  onCopy={() => void copyCredential(account.email, "Username")}
                 >
                   {account.email}
-                </Field>
+                </CredentialRow>
                 {account.login_type === "password" ? (
                   <AccountPassword
                     key={`${account.id}:${account.updated_at}`}
                     accountId={account.id}
                   />
                 ) : (
-                  <Field label="Sign-in method">Google sign-in</Field>
+                  <CredentialRow label="Sign-in method">
+                    Google sign-in
+                  </CredentialRow>
                 )}
+              </div>
+              <dl className="mt-4 divide-y">
                 <Field label="Websites">
                   {accountWebsites(account, project).length ? (
                     accountWebsites(account, project).map((site) => (
@@ -652,7 +676,7 @@ export function ProjectsView({
                         }
                         target="_blank"
                         rel="noreferrer"
-                        className="flex items-center justify-between gap-4 py-1 text-primary hover:underline"
+                        className="flex items-center justify-between gap-4 py-1 text-[var(--vault-label)] hover:underline"
                       >
                         <span>
                           {new URL(site.url).host}
@@ -670,6 +694,9 @@ export function ProjectsView({
                     </span>
                   )}
                 </Field>
+                {account.tags?.length ? (
+                  <Field label="Tags">{account.tags.join(" · ")}</Field>
+                ) : null}
                 {account.notes && (
                   <Field label="Notes">
                     <span className="whitespace-pre-wrap">{account.notes}</span>
@@ -682,9 +709,13 @@ export function ProjectsView({
                   </span>
                 </Field>
               </dl>
-              <p className="mt-6 text-xs text-muted-foreground">
-                Last updated {new Date(account.updated_at).toLocaleString()}
-              </p>
+              <LoginActivity
+                key={account.id}
+                id={account.id}
+                stamp={account.updated_at}
+                created={account.created_at}
+                request={orgRequest}
+              />
             </div>
           ) : (
             <div className="flex min-h-[55dvh] flex-col items-center justify-center gap-3 p-6 text-center">

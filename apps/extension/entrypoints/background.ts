@@ -29,7 +29,7 @@ export default defineBackground(() => {
   browser.runtime.onInstalled.addListener((details) => {
     if (details.reason === "install")
       void browser.tabs.create({
-        url: browser.runtime.getURL("/popup.html#welcome"),
+        url: browser.runtime.getURL("/welcome.html"),
       })
   })
   // Credentials and session tokens are never available through content-script storage.
@@ -47,7 +47,7 @@ export default defineBackground(() => {
   }
   async function api<T>(path: string, options?: RequestInit): Promise<T> {
     const { origin, token } = await configuration()
-    if (!token) throw new ApiError("Sign in to DevLogin", 401)
+    if (!token) throw new ApiError("Sign in to Global Login", 401)
     try {
       return await apiRequest<T>(origin, path, options, token)
     } catch (error) {
@@ -215,6 +215,7 @@ export default defineBackground(() => {
           "pending",
           "confirm",
           "dismiss",
+          "open-profiles",
           "manage",
         ].includes(message.type)
       )
@@ -353,6 +354,7 @@ export default defineBackground(() => {
           monitoring:
             origins.includes("https://*/*") && origins.includes("http://*/*"),
           settings: await readUiSettings(),
+          pageTitle: tab?.title,
           matchedProjectId:
             data && tab?.id && tab.url
               ? ((
@@ -370,9 +372,15 @@ export default defineBackground(() => {
       }
       case "api": {
         if (
-          !/^\/api\/(projects|accounts|preferences)(\/[a-zA-Z0-9-]+)?(\/password)?$/.test(
+          message.path !== "/api/favicons/refresh" &&
+          !(
+            message.path === "/api/files" &&
+            (!message.method || message.method === "GET")
+          ) &&
+          (!/^\/api\/(projects|accounts|preferences|personal-items|activity|collections)(\/[a-zA-Z0-9_~.%:-]+)?(\/password)?$/.test(
             message.path
-          )
+          ) ||
+            /(?:^|\/)(?:\.|%2e){1,2}(?:\/|$)|%2f|%5c/i.test(message.path))
         )
           throw new Error("Unsupported API path")
         const result = await api(message.path, {
@@ -401,13 +409,13 @@ export default defineBackground(() => {
         if (
           forbidden(url, (await configuration()).origin, excluded as string[])
         )
-          throw new Error("DevLogin is disabled on this website")
+          throw new Error("Global Login is disabled on this website")
         if (
           !(await browser.permissions.contains({
             origins: [new URL(url).origin + "/*"],
           }))
         )
-          throw new Error("Enable DevLogin on the saved website first")
+          throw new Error("Enable Global Login on the saved website first")
         const tab = await browser.tabs.create({ url })
         if (!tab.id) throw new Error("Could not open website")
         openingLogins.add(tab.id)
@@ -426,7 +434,7 @@ export default defineBackground(() => {
             await new Promise((resolve) => setTimeout(resolve, 250))
           }
           throw new Error(
-            "Website is still loading. Open DevLogin there to fill."
+            "Website is still loading. Open Global Login there to fill."
           )
         } finally {
           openingLogins.delete(tab.id)
@@ -458,7 +466,7 @@ export default defineBackground(() => {
             excluded as string[]
           )
         )
-          throw new Error("DevLogin is disabled on this website")
+          throw new Error("Global Login is disabled on this website")
         if (!accountMatches(account, tab.url))
           throw new Error("Account belongs to another environment")
         if (
@@ -466,7 +474,7 @@ export default defineBackground(() => {
             origins: [new URL(tab.url).origin + "/*"],
           }))
         )
-          throw new Error("Enable DevLogin on this site first")
+          throw new Error("Enable Global Login on this site first")
         const matched = await matchPage(
           siteProjects(data, tab.url),
           tab.url,
@@ -486,7 +494,8 @@ export default defineBackground(() => {
             ) ?? project.urls[0]!
           await browser.tabs.create({ url: loginUrl(project, environment) })
           return {
-            message: "Login page opened. Open DevLogin there and choose Login.",
+            message:
+              "Login page opened. Open Global Login there and choose Login.",
           }
         }
         if (message.submit) await reserve(tab.id, project.id, false)

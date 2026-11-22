@@ -29,6 +29,34 @@
       "when": 1795281889039,
       "tag": "0003_opposite_northstar",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1795310660979,
+      "tag": "0004_smiling_valeria_richards",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1795310835920,
+      "tag": "0005_cheerful_solo",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1795311109128,
+      "tag": "0006_bitter_manta",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1795311233746,
+      "tag": "0007_lucky_dakota_north",
+      "breakpoints": true
     }
   ]
 }

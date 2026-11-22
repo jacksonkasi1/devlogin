@@ -1,3 +1,4 @@
+import { openTools } from "./tools-window"
 import { browser, type Browser } from "wxt/browser"
 import {
   accountMatches,
@@ -53,13 +54,13 @@ export function pageActions(deps: {
     const { origin } = await deps.configuration()
     const { excluded = [] } = await browser.storage.local.get("excluded")
     if (forbidden(sender.url, origin, excluded as string[]))
-      throw new Error("DevLogin is disabled on this website")
+      throw new Error("Global Login is disabled on this website")
     if (
       !(await browser.permissions.contains({
         origins: [new URL(sender.url).origin + "/*"],
       }))
     )
-      throw new Error("Enable DevLogin on this site first")
+      throw new Error("Enable Global Login on this site first")
     const data = await deps.sync(localAddress(sender.url))
     const matched = await matchPage(
       siteProjects(data, sender.url),
@@ -75,6 +76,7 @@ export function pageActions(deps: {
       throw new Error("Administrator approval is required")
     }
     return {
+      backend: origin,
       settings: await readUiSettings(),
       project,
       accounts: project
@@ -112,6 +114,9 @@ export function pageActions(deps: {
     switch (message.type) {
       case "page":
         return context
+      case "open-profiles":
+        await openTools("choose-profile", tabId, sender.url)
+        return null
       case "manage":
         await browser.tabs.create({ url: (await deps.configuration()).origin })
         return null

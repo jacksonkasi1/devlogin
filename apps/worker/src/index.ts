@@ -2,7 +2,7 @@ import { Hono } from "hono"
 import { cors } from "hono/cors"
 import { bodyLimit } from "hono/body-limit"
 import { HTTPException } from "hono/http-exception"
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, ne } from "drizzle-orm"
 import { z, ZodError } from "zod"
 import {
   accountSchema,
@@ -25,10 +25,25 @@ import {
 } from "./auth"
 import { accounts, mcpTokens, preferences, projects, users } from "./schema"
 import { decrypt, encrypt, hash, randomToken } from "./crypto"
+import { fileApi, maxFileBytes } from "./files"
+import { activity, logMatchingAccounts, organization } from "./organization"
+import { collections } from "./schema"
+import { personalApi } from "./personal-items"
+import { refreshIcons } from "./refresh-icons"
 import { createMcp } from "./mcp"
 import { declaredFavicon, publicWebsite } from "./favicon"
 
 const app = new Hono<AppEnv>()
+app.use("*", async (c, next) => {
+  const url = new URL(c.req.url)
+  if (url.hostname === "globallogin.peacockindia.in") {
+    const target = new URL(c.env.APP_ORIGIN)
+    target.pathname = url.pathname
+    target.search = url.search
+    return c.redirect(target.href, 307)
+  }
+  await next()
+})
 app.use("/api/*", async (c, next) => {
   c.header("Cache-Control", "no-store")
   c.header("X-Content-Type-Options", "nosniff")
@@ -46,10 +61,15 @@ app.use(
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   })
 )
+const fileBody = bodyLimit({ maxSize: maxFileBytes })
 const smallBody = bodyLimit({ maxSize: 524288 })
 const backupBody = bodyLimit({ maxSize: 8 * 1024 * 1024 })
 app.use("/api/*", (c, next) =>
-  (c.req.path === "/api/backup/import" ? backupBody : smallBody)(c, next)
+  (c.req.path === "/api/files" && c.req.method === "POST"
+    ? fileBody
+    : c.req.path === "/api/backup/import"
+      ? backupBody
+      : smallBody)(c, next)
 )
 app.route("/api/auth", auth)
 // Images cannot attach extension bearer tokens. Return only public icon URLs.
@@ -68,6 +88,9 @@ app.get("/api/favicon", async (c) => {
 app.use("/api/*", safeMutation, authenticated)
 app.get("/api/me", (c) => c.json(c.get("user")))
 app.use("/api/*", approved)
+app.route("/api/personal-items", personalApi)
+app.route("/api/files", fileApi)
+app.route("/api", organization)
 
 const publicAccount = ({
   encrypted_password: _secret,
@@ -146,11 +169,35 @@ app.put("/api/projects/:id", editor, async (c) => {
     ...(raw.login_path !== undefined ? { login_path } : {}),
     ...(raw.selectors !== undefined ? { selectors } : {}),
   }
-  const [project] = await database(c.env)
+  const db = database(c.env),
+    id = c.req.param("id")
+  const [prior] = await db.select().from(projects).where(eq(projects.id, id))
+  const fields = Object.entries(changes)
+    .filter(
+      ([key, value]) =>
+        value !== undefined &&
+        JSON.stringify(value) !==
+          JSON.stringify(prior?.[key as keyof typeof prior])
+    )
+    .map(([key]) => key)
+  const write = db
     .update(projects)
     .set({ ...changes, updated_at: new Date().toISOString() })
-    .where(eq(projects.id, c.req.param("id")))
+    .where(eq(projects.id, id))
     .returning()
+  const [project] = fields.length
+    ? (
+        await db.batch([
+          write,
+          logMatchingAccounts(
+            c,
+            eq(accounts.project_id, id),
+            "Project edited",
+            fields
+          ),
+        ])
+      )[0]
+    : await write
   if (!project) throw new HTTPException(404, { message: "Project not found" })
   return c.json(project)
 })
@@ -163,6 +210,9 @@ app.delete("/api/projects/:id", editor, async (c) => {
     throw new HTTPException(404, { message: "Project not found" })
   return c.json({ ok: true })
 })
+app.post("/api/favicons/refresh", editor, async (c) =>
+  c.json(await refreshIcons(database(c.env), await c.req.json()))
+)
 app.get("/api/accounts", async (c) => {
   const projectId = c.req.query("project_id")
   const rows = await database(c.env)
@@ -278,18 +328,45 @@ for (const method of ["post", "put"] as const) {
                 .where(eq(preferences.account_id, id)),
             ]
           : []
+      const changed = Object.entries(metadata)
+        .filter(
+          ([key, value]) =>
+            JSON.stringify(existing?.[key as keyof typeof existing]) !==
+            JSON.stringify(value)
+        )
+        .map(([key]) => key)
+      if (
+        password !== undefined ||
+        (existing?.encrypted_password && !encrypted_password)
+      )
+        changed.push("password")
+      const events =
+        changed.length || !existing
+          ? [activity(c, id, existing ? "Edited" : "Created", changed)]
+          : []
       const results = input.is_default
         ? await db.batch([
+            logMatchingAccounts(
+              c,
+              and(
+                eq(accounts.project_id, input.project_id),
+                eq(accounts.is_default, true),
+                ne(accounts.id, id)
+              )!,
+              "Edited",
+              ["is_default"]
+            ),
             db
               .update(accounts)
               .set({ is_default: false })
               .where(eq(accounts.project_id, input.project_id)),
             mutation,
             ...preferenceUpdates,
+            ...events,
           ])
-        : await db.batch([mutation, ...preferenceUpdates])
+        : await db.batch([mutation, ...preferenceUpdates, ...events])
       const result = results[
-        input.is_default ? 1 : 0
+        input.is_default ? 2 : 0
       ] as (typeof accounts.$inferSelect)[]
       return c.json(publicAccount(result[0]!), method === "post" ? 201 : 200)
     }
@@ -373,6 +450,7 @@ app.get("/api/sync", async (c) => {
   ])
   const data = {
     projects: projectRows,
+    collections: await db.select().from(collections).orderBy(collections.name),
     accounts: accountRows.map(publicAccount),
     preferences: preferenceRows,
   }

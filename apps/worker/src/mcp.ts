@@ -1,3 +1,8 @@
+import {
+  generatePassword,
+  personalFields,
+  personalKinds,
+} from "@workspace/shared"
 import { Hono } from "hono"
 import type { AppEnv } from "./auth"
 
@@ -44,12 +49,22 @@ const website = {
   },
   required: ["url"],
 }
+const tags = {
+  type: "array",
+  items: str("Tag"),
+  description: "Organization tags. Send [] to clear.",
+}
+const icon = str(
+  "An emoji, a built-in icon name (folder, key, terminal, globe, code, database), or an empty string for the automatic icon."
+)
 const loginFields = {
+  tags,
+  environment: str("Legacy project website origin, or empty for every website"),
   label: str("Display name of the login, e.g. 'Admin' or 'QA user'"),
   email: str("Username or email used to sign in"),
   password: str("Password. Omit on update to keep the current one"),
   login_type: { type: "string", enum: ["password", "google"] },
-  icon: str("Emoji used as the login icon, e.g. 🔑"),
+  icon,
   notes: str("Free-form notes"),
   websites: {
     type: "array",
@@ -64,7 +79,11 @@ const loginFields = {
 const projectFields = {
   name: str("Project name"),
   description: str("Project description"),
-  icon: str("Emoji used as the project icon"),
+  icon,
+  tags,
+  urls: { type: "array", items: str("Project website URL") },
+  login_path: website.properties.login_path,
+  selectors: website.properties.selectors,
 }
 const pick = (input: Json, keys: string[]) =>
   Object.fromEntries(
@@ -93,17 +112,31 @@ const tools: Tool[] = [
     inputSchema: obj({
       project_id: str("Only logins of this project"),
       query: str("Case-insensitive search text"),
+      tag: str("Exact tag, case insensitive"),
     }),
     annotations: { readOnlyHint: true },
     run: async (input, api) => {
       const path = input.project_id
         ? `/api/accounts?project_id=${encodeURIComponent(String(input.project_id))}`
         : "/api/accounts"
-      const rows = await api<Row[]>(path)
+      const rows = (await api<Row[]>(path)).filter(
+        (row) =>
+          !input.tag ||
+          (Array.isArray(row.tags) &&
+            row.tags.some(
+              (t) => String(t).toLowerCase() === String(input.tag).toLowerCase()
+            ))
+      )
       const query = String(input.query ?? "").toLowerCase()
       return query
         ? rows.filter((row) =>
-            JSON.stringify([row.label, row.email, row.notes, row.websites])
+            JSON.stringify([
+              row.label,
+              row.email,
+              row.notes,
+              row.websites,
+              row.tags,
+            ])
               .toLowerCase()
               .includes(query)
           )
@@ -222,6 +255,260 @@ const tools: Tool[] = [
       api(`/api/accounts/${encodeURIComponent(text(input, "id"))}`, "DELETE"),
   },
   {
+    name: "refetch_favicons",
+    description:
+      "Rediscover website icons for one login (id) or every automatic icon. Repeat with after set to next until next is null. Custom icons are preserved.",
+    inputSchema: obj({
+      id: str("Optional login id"),
+      after: str("Continuation cursor from next"),
+    }),
+    run: (input, api) => api("/api/favicons/refresh", "POST", input),
+  },
+  {
+    name: "list_preferences",
+    description: "List your per-project autofill preferences.",
+    inputSchema: obj({}),
+    annotations: { readOnlyHint: true },
+    run: (_, api) => api("/api/preferences"),
+  },
+  {
+    name: "set_preference",
+    description:
+      "Set your selected login and auto-login preference for a project.",
+    inputSchema: obj(
+      {
+        project_id: str("Project id"),
+        account_id: { type: ["string", "null"] },
+        auto_login: { type: "boolean" },
+      },
+      ["project_id", "account_id", "auto_login"]
+    ),
+    run: (input, api) => api("/api/preferences", "PUT", input),
+  },
+  {
+    name: "list_members",
+    description: "List workspace members and access settings. Admin only.",
+    inputSchema: obj({}),
+    annotations: { readOnlyHint: true },
+    run: (_, api) => api("/api/users"),
+  },
+  {
+    name: "update_member",
+    description: "Change member approval or privileges. Admin only.",
+    inputSchema: obj(
+      {
+        id: str("Member id"),
+        approved: { type: "boolean" },
+        can_edit: { type: "boolean" },
+        can_backup: { type: "boolean" },
+        is_admin: { type: "boolean" },
+      },
+      ["id"]
+    ),
+    run: (input, api) =>
+      api(
+        "/api/users/" + encodeURIComponent(text(input, "id")),
+        "PATCH",
+        pick(input, ["approved", "can_edit", "can_backup", "is_admin"])
+      ),
+  },
+  {
+    name: "edit_items",
+    description:
+      "Apply up to 10 login or project updates in order. Each item needs id and changed fields. Stops at the first failure and returns its index and completed IDs. Use to rename, tag, move, or change icons.",
+    inputSchema: obj(
+      {
+        edits: {
+          type: "array",
+          minItems: 1,
+          maxItems: 10,
+          items: {
+            oneOf: [
+              obj(
+                {
+                  type: { const: "login" },
+                  id: str("Login id"),
+                  project_id: str("Destination project"),
+                  ...loginFields,
+                },
+                ["type", "id"]
+              ),
+              obj(
+                {
+                  type: { const: "project" },
+                  id: str("Project id"),
+                  ...projectFields,
+                },
+                ["type", "id"]
+              ),
+            ],
+          },
+        },
+      },
+      ["edits"]
+    ),
+    run: async (input, api) => {
+      if (
+        !Array.isArray(input.edits) ||
+        !input.edits.length ||
+        input.edits.length > 10
+      )
+        throw new Error("Provide 1–10 edits")
+      const completed: string[] = []
+      for (const edit of input.edits) {
+        try {
+          if (edit?.type !== "project" && edit?.type !== "login")
+            throw new Error("Unknown item type")
+          const tool = tools.find((t) => t.name === "update_" + edit.type)!
+          await tool.run(edit, api)
+          completed.push(edit.id)
+        } catch (error) {
+          return {
+            completed,
+            failed_index: completed.length,
+            error: error instanceof Error ? error.message : "Update failed",
+          }
+        }
+      }
+      return { completed }
+    },
+  },
+  {
+    name: "list_collections",
+    description:
+      "List named groups and their membership tags. Tag a project or login to include it.",
+    inputSchema: obj({}),
+    run: (_, api) => api("/api/collections"),
+  },
+  {
+    name: "save_collection",
+    description:
+      "Create or edit a named collection of logins matching a tag across projects.",
+    inputSchema: obj(
+      {
+        id: str("Existing collection id"),
+        name: str("Collection name"),
+        tag: str("Membership tag"),
+      },
+      ["name", "tag"]
+    ),
+    run: (i, api) =>
+      api(
+        "/api/collections" +
+          (i.id ? "/" + encodeURIComponent(text(i, "id")) : ""),
+        i.id ? "PUT" : "POST",
+        pick(i, ["name", "tag"])
+      ),
+  },
+  {
+    name: "delete_collection",
+    description: "Delete a collection view and retain its logins.",
+    inputSchema: obj({ id: str("Collection id") }, ["id"]),
+    annotations: { destructiveHint: true },
+    run: (i, api) =>
+      api("/api/collections/" + encodeURIComponent(text(i, "id")), "DELETE"),
+  },
+  {
+    name: "login_activity",
+    description:
+      "See a login's creator, recent editors, timestamps and changed field names.",
+    inputSchema: obj({ id: str("Login id") }, ["id"]),
+    annotations: { readOnlyHint: true },
+    run: (i, api) => api("/api/activity/" + encodeURIComponent(text(i, "id"))),
+  },
+  {
+    name: "list_files",
+    description: "List your private R2 attachments.",
+    inputSchema: obj({}),
+    annotations: { readOnlyHint: true },
+    run: (_, api) => api("/api/files"),
+  },
+  {
+    name: "upload_text_file",
+    description:
+      "Upload a small private text or JSON attachment. For binary files and files up to 50 MB use File attachments.",
+    inputSchema: obj(
+      {
+        name: str("Filename"),
+        text: str("File contents, maximum 64000 characters"),
+      },
+      ["name", "text"]
+    ),
+    run: (input, api) => api("/api/files/text", "POST", input),
+  },
+  {
+    name: "rename_file",
+    description: "Rename your attachment.",
+    inputSchema: obj({ id: str("File id"), name: str("New filename") }, [
+      "id",
+      "name",
+    ]),
+    run: (input, api) =>
+      api("/api/files/" + encodeURIComponent(text(input, "id")), "PATCH", {
+        name: text(input, "name"),
+      }),
+  },
+  {
+    name: "delete_file",
+    description: "Permanently delete your attachment.",
+    inputSchema: obj({ id: str("File id") }, ["id"]),
+    annotations: { destructiveHint: true },
+    run: (input, api) =>
+      api("/api/files/" + encodeURIComponent(text(input, "id")), "DELETE"),
+  },
+  {
+    name: "list_personal_items",
+    description:
+      "List your private profile, card and secure-note titles and tags.",
+    inputSchema: obj({}),
+    annotations: { readOnlyHint: true },
+    run: (_, api) => api("/api/personal-items"),
+  },
+  {
+    name: "get_personal_item",
+    description: "Read your selected private item including sensitive fields.",
+    inputSchema: obj({ id: str("Item id") }, ["id"]),
+    annotations: { readOnlyHint: true },
+    run: (input, api) =>
+      api("/api/personal-items/" + encodeURIComponent(text(input, "id"))),
+  },
+  {
+    name: "save_personal_item",
+    description:
+      "Create a private profile, card, or secure note. Include id for partial edits. Fields by kind: " +
+      JSON.stringify(personalFields),
+    inputSchema: obj({
+      id: str("Existing item id"),
+      kind: { enum: personalKinds },
+      title: str("Display name"),
+      icon,
+      tags,
+      fields: { type: "object", additionalProperties: { type: "string" } },
+    }),
+    run: async (input, api) => {
+      const path =
+        "/api/personal-items" +
+        (input.id ? "/" + encodeURIComponent(text(input, "id")) : "")
+      const current = input.id ? await api<Json>(path) : {}
+      return api(path, input.id ? "PUT" : "POST", {
+        ...pick(current, ["kind", "title", "icon", "tags"]),
+        ...pick(input, ["kind", "title", "icon", "tags"]),
+        fields: { ...(current.fields as Json), ...(input.fields as Json) },
+      })
+    },
+  },
+  {
+    name: "delete_personal_item",
+    description: "Delete your private item.",
+    inputSchema: obj({ id: str("Item id") }, ["id"]),
+    annotations: { destructiveHint: true },
+    run: (input, api) =>
+      api(
+        "/api/personal-items/" + encodeURIComponent(text(input, "id")),
+        "DELETE"
+      ),
+  },
+  {
     name: "generate_password",
     description: "Generate a strong random password (nothing is saved).",
     inputSchema: obj({
@@ -229,19 +516,7 @@ const tools: Tool[] = [
     }),
     annotations: { readOnlyHint: true },
     run: async (input) => {
-      const length = Math.min(
-        128,
-        Math.max(16, Math.floor(Number(input.length) || 24))
-      )
-      const alphabet =
-        "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*-_"
-      const limit = 256 - (256 % alphabet.length)
-      let password = ""
-      while (password.length < length)
-        for (const byte of crypto.getRandomValues(new Uint8Array(length)))
-          if (byte < limit && password.length < length)
-            password += alphabet[byte % alphabet.length]
-      return { password }
+      return { password: generatePassword(Number(input.length)) }
     },
   },
   {
@@ -308,7 +583,7 @@ export function createMcp(
           capabilities: { tools: { listChanged: false } },
           serverInfo: { name: "devlogin", version: "1.0.0" },
           instructions:
-            "DevLogin shared credential vault. Use list_projects/list_logins to browse, get_login for a password, and create/update/delete tools to manage logins. Your access rights are the same as your DevLogin account.",
+            "Global Login shared credential vault. Use list_projects/list_logins to browse, get_login for a password, and create/update/delete tools to manage logins. Your access rights are the same as your Global Login account.",
         })
       }
       case "ping":

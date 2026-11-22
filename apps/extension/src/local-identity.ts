@@ -52,7 +52,7 @@ export async function tabIdentity(tabId: number): Promise<PageIdentity> {
     func: readPageIdentity,
   })
   if (!result?.result)
-    throw new Error("Enable DevLogin on this site to identify it")
+    throw new Error("Enable Global Login on this site to identify it")
   return result.result
 }
 export async function matchPage(

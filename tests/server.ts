@@ -76,6 +76,7 @@ if (!bundle.success) throw new Error("Fixture bundle failed")
 const reactJs = await bundle.outputs[0]!.text()
 const webDist = new URL("../apps/web/dist/", import.meta.url)
 Bun.serve({
+  hostname: "localhost",
   port: 8799,
   async fetch(request) {
     const url = new URL(request.url)

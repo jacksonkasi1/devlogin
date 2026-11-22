@@ -148,7 +148,7 @@ export function McpPage({ user }: { user: User }) {
         <CardHeader>
           <CardTitle>MCP access</CardTitle>
           <CardDescription>
-            Connect Claude, Codex, OpenCode and other AI tools to DevLogin. They
+            Connect Claude, Codex, OpenCode and other AI tools to Global Login. They
             can browse, add, rename, edit, move and delete projects and logins
             (including emoji icons, notes and passwords), and use backups.{" "}
             {editing

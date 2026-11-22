@@ -329,7 +329,7 @@ test("regular users can add, change and remove logins by default", async () => {
       project_id: p.id,
       label: "Mine",
       email: "me",
-      password: "pw-one",
+      password: crypto.randomUUID(),
       login_type: "password",
     },
     "member"
@@ -341,7 +341,7 @@ test("regular users can add, change and remove logins by default", async () => {
       await request(
         `/accounts/${a.id}`,
         "PUT",
-        { ...a, password: "pw-two" },
+        { ...a, password: crypto.randomUUID() },
         "member"
       )
     ).status
@@ -543,4 +543,135 @@ test("MCP respects view-only and disabled access", async () => {
       )
     ).status
   ).toBe(401)
+})
+
+test("private vault fields are encrypted and only the owner can read, edit or delete them", async () => {
+  const input = {
+    kind: "note",
+    title: "Setup",
+    fields: { content: crypto.randomUUID() },
+  }
+  const saved = (await (
+    await request("/personal-items", "POST", input, "member")
+  ).json()) as { id: string }
+  const path = "/personal-items/" + saved.id
+  expect((await request(path, "GET", undefined, "member")).status).toBe(200)
+  for (const method of ["GET", "PUT", "DELETE"]) {
+    expect(
+      (
+        await request(
+          path,
+          method,
+          method === "PUT" ? input : undefined,
+          "admin"
+        )
+      ).status
+    ).toBe(404)
+  }
+  expect(
+    JSON.stringify(
+      await (
+        await request("/personal-items", "GET", undefined, "member")
+      ).json()
+    )
+  ).not.toContain(input.fields.content)
+  expect(
+    JSON.stringify(db.sqlite.query("select * from personal_items").all())
+  ).not.toContain(input.fields.content)
+  expect((await request(path, "DELETE", undefined, "member")).status).toBe(200)
+})
+
+test("collections and MCP changes are attributed without storing credential values", async () => {
+  const p = await project()
+  const a = await account(p.id)
+  const token = (
+    (await (await request("/mcp/token", "POST", {}, "member")).json()) as {
+      token: string
+    }
+  ).token
+  const group = await call(token, "save_collection", {
+    name: "Release",
+    tag: "shipping",
+  })
+  expect(group.value.name).toBe("Release")
+  const batch = await call(token, "edit_items", {
+    edits: [
+      { type: "login", id: a.id, tags: ["shipping"], label: "Release console" },
+    ],
+  })
+  expect(batch.value.completed).toEqual([a.id])
+  const history = await call(token, "login_activity", { id: a.id })
+  expect(history.value.created.name).toBe("admin")
+  expect(history.value.rows[0]).toMatchObject({
+    source: "MCP",
+    email: "member@example.com",
+    fields: expect.arrayContaining(["tags", "label"]),
+  })
+  expect(JSON.stringify(history.value)).not.toContain("a-secret-password")
+  expect(
+    (await call(token, "list_logins", { tag: "shipping" })).value
+  ).toHaveLength(1)
+})
+
+test("attachment uploads enforce the limit and preserve ownership on download, rename and delete", async () => {
+  const objects = new Map<string, Uint8Array>()
+  env.FILES = {
+    put: async (key: string, value: Uint8Array | ReadableStream) => {
+      objects.set(
+        key,
+        new Uint8Array(await new Response(value as BodyInit).arrayBuffer())
+      )
+    },
+    get: async (key: string) =>
+      objects.has(key)
+        ? { body: objects.get(key), size: objects.get(key)!.length }
+        : null,
+    delete: async (key: string) => {
+      objects.delete(key)
+    },
+  } as unknown as R2Bucket
+  const id = (
+    (await (
+      await request(
+        "/files/text",
+        "POST",
+        { name: "config.json", text: "{}" },
+        "member"
+      )
+    ).json()) as { id: string }
+  ).id
+  const path = "/files/" + id
+  expect(await (await request(path, "GET", undefined, "member")).text()).toBe(
+    "{}"
+  )
+  for (const method of ["GET", "PATCH", "DELETE"]) {
+    expect(
+      (
+        await request(
+          path,
+          method,
+          method === "PATCH" ? { name: "x" } : undefined
+        )
+      ).status
+    ).toBe(404)
+  }
+  expect(
+    (await request(path, "PATCH", { name: "updated.json" }, "member")).status
+  ).toBe(200)
+  const response = await app.request(
+    "http://localhost:8787/api/files?name=big.bin",
+    {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer member",
+        "Content-Type": "application/octet-stream",
+        "Content-Length": String(50 * 1024 * 1024 + 1),
+      },
+      body: "x",
+    },
+    env
+  )
+  expect(response.status).toBe(413)
+  expect((await request(path, "DELETE", undefined, "member")).status).toBe(200)
+  expect(objects.size).toBe(0)
 })

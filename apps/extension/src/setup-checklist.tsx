@@ -10,28 +10,44 @@ export type Step = {
   action?: string
   run?: () => Promise<void>
 }
+
+export function openSetup() {
+  return browser.tabs.create({
+    url: browser.runtime.getURL("/welcome.html#setup"),
+  })
+}
+
 export function useSetupSteps(
   snapshot: Snapshot | null,
   act: (action: () => Promise<unknown>, success?: string) => Promise<void>
 ): Step[] {
   const [pinned, setPinned] = useState<boolean | null>(null)
   useEffect(() => {
-    browser.action
-      .getUserSettings?.()
-      .then((settings) => setPinned(settings.isOnToolbar))
-      .catch(() => setPinned(true))
+    const update = () => {
+      void browser.action
+        .getUserSettings?.()
+        .then((settings) => setPinned(settings.isOnToolbar))
+        .catch(() => setPinned(null))
+    }
+    update()
+    window.addEventListener("focus", update)
+    browser.action.onUserSettingsChanged?.addListener(update)
+    return () => {
+      window.removeEventListener("focus", update)
+      browser.action.onUserSettingsChanged?.removeListener(update)
+    }
   }, [])
   return [
     {
       done: !!snapshot?.user,
       label: "Sign in with Google",
-      action: "Sign in",
+      action: "Continue with Google",
       run: () => act(() => send({ type: "login" })),
     },
     {
       done: !!snapshot?.monitoring,
-      label: "Allow DevLogin on all websites",
-      action: "Allow",
+      label: "Allow Global Login on all websites",
+      action: "Allow access",
       run: () =>
         act(async () => {
           const granted = await browser.permissions.request({
@@ -39,18 +55,17 @@ export function useSetupSteps(
           })
           if (!granted)
             throw new Error(
-              "In chrome://extensions open DevLogin → Details → Site access, and choose “On all sites”."
+              "Open Global Login’s extension details and set Site access to On all sites."
             )
-        }, "DevLogin now works on every website"),
+        }),
     },
     {
       done: pinned !== false,
-      label: "Pin DevLogin to your toolbar",
+      label: "Pin Global Login to your toolbar",
     },
   ]
 }
 
-// Shown only while something is incomplete, and disappears once everything is done.
 export function SetupChecklist({
   snapshot,
   busy,
@@ -61,32 +76,20 @@ export function SetupChecklist({
   act: (action: () => Promise<unknown>, success?: string) => Promise<void>
 }) {
   const steps = useSetupSteps(snapshot, act)
-  if (!snapshot) return null
-  if (steps.every((step) => step.done)) return null
+  if (!snapshot || steps.every((step) => step.done)) return null
   return (
-    <section
-      aria-label="Finish setup"
-      className="space-y-2 border-b bg-amber-500/5 px-4 py-3"
-    >
-      <p className="text-sm font-medium">Finish setup</p>
-      {steps.map((step) => (
-        <div
-          key={step.label}
-          className="flex items-center justify-between gap-2 text-xs"
-        >
-          <span
-            className={step.done ? "text-muted-foreground line-through" : ""}
-          >
-            {step.done ? "✓ " : "○ "}
-            {step.label}
-          </span>
-          {!step.done && step.run && (
-            <Button size="sm" disabled={busy} onClick={() => void step.run?.()}>
-              {step.action}
-            </Button>
-          )}
-        </div>
-      ))}
-    </section>
+    <div className="flex items-center justify-between gap-2 border-b px-3 py-1.5">
+      <span className="text-xs text-muted-foreground">
+        Extension setup is incomplete.
+      </span>
+      <Button
+        variant="ghost"
+        size="xs"
+        disabled={busy}
+        onClick={() => void openSetup()}
+      >
+        Finish setup
+      </Button>
+    </div>
   )
 }
