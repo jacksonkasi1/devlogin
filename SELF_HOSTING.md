@@ -8,6 +8,8 @@
 4. If you named your database differently, update the database name in the worker's db:remote script or run Wrangler's D1 migrations command with your database name. Build the website, apply migrations to the new database, then deploy the Worker and its static assets. The extension is built separately with `bun run extension:zip`.
 5. Complete browser sign-in and verify approval, vault access, and a file round trip with a disposable record.
 
+For local testing with multiple production domains, use the local Worker host. For example, from apps/worker run `bunx wrangler dev --local --local-upstream localhost`. This keeps the alias redirect from sending development traffic to production.
+
 ## Upgrade an existing installation
 
 1. Record the current release, Worker version, D1 ID, R2 bucket, APP_ORIGIN, allowlisted extension IDs and encryption-key secret reference. Keep your own deployment configuration when bringing in the release.

@@ -6,6 +6,7 @@
   "compatibility_date": "2026-10-11",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
+  "dev": {"host":"localhost"},
   "r2_buckets": [{"binding":"FILES","bucket_name":"global-login-files"}],
   "routes": [{"pattern":"globallogin.peacockindia.in","custom_domain":true,"zone_name":"peacockindia.in"},{ "pattern": "devlogin.peacockindia.in", "custom_domain": true, "zone_name": "peacockindia.in" }],
   "preview_urls": false,
