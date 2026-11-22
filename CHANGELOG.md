@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.2 · 2026-11-22
+
+- The floating prompt now shows the login title and username on separate lines. Other logins opens a searchable panel with keyboard selection.
+
 ## 1.1.1 · 2026-11-22
 
 - Added a dismissible floating login chooser on matching password sign-in forms. Toggle it in extension Settings.

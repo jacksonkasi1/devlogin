@@ -1486,3 +1486,34 @@ test("floating login fills a matching form on click and can be dismissed", async
   await expect(prompt).toHaveCount(0)
   await page.close()
 })
+
+test("Other logins searches usernames and fills the keyboard selection", async () => {
+  await api("/accounts", "POST", {
+    project_id: "fixture-project",
+    label: "Studio",
+    email: "editor@example.test",
+    password: crypto.randomUUID(),
+    login_type: "password",
+    websites: [{ url: fixture }],
+  })
+  const page = await context.newPage()
+  await page.goto(fixture + "/login")
+  const other = page.getByRole("button", { name: /Other logins/ })
+  await other.click()
+  const search = page.getByRole("combobox", { name: "Find a saved login" })
+  await expect(search).toBeFocused()
+  await expect(page.getByRole("option")).toHaveCount(2)
+  await search.press("ArrowDown")
+  await expect(page.getByRole("option").nth(1)).toHaveAttribute(
+    "aria-selected",
+    "true"
+  )
+  await search.press("Escape")
+  await expect(other).toBeFocused()
+  await other.click()
+  await search.fill("editor@")
+  await expect(page.getByRole("option")).toHaveCount(1)
+  await search.press("Enter")
+  await expect(page.locator("#email")).toHaveValue("editor@example.test")
+  await page.close()
+})
