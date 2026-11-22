@@ -1,3 +1,4 @@
+import { openCenteredWindow } from "./centered-window"
 import { browser } from "wxt/browser"
 import type { Account } from "@workspace/shared"
 
@@ -17,11 +18,5 @@ export function openLoginWindow({
   if (accountId) url.searchParams.set("account", accountId)
   if (projectId) url.searchParams.set("project", projectId)
   if (tabId !== undefined) url.searchParams.set("tab", String(tabId))
-  return browser.windows.create({
-    url: url.href,
-    type: "popup",
-    width: 530,
-    height: 690,
-    focused: true,
-  })
+  return openCenteredWindow(url, 530, 690, tabId)
 }

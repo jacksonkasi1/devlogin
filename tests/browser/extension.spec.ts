@@ -18,16 +18,21 @@ let extensionId: string
 const backend = "http://localhost:8799"
 const fixture = "http://localhost:8798"
 const profile = mkdtempSync(resolve(tmpdir(), "devlogin-browser-"))
-async function launch() {
+async function launch(nativeWindow = false) {
   const extension = resolve("apps/extension/.output/chrome-mv3")
-  context = await chromium.launchPersistentContext(profile, {
-    channel: "chromium",
-    headless: true,
-    args: [
-      `--disable-extensions-except=${extension}`,
-      `--load-extension=${extension}`,
-    ],
-  })
+  context = await chromium.launchPersistentContext(
+    nativeWindow ? "" : profile,
+    {
+      // Window-position tests need native window bounds instead of an emulated viewport.
+      ...(nativeWindow ? { viewport: null } : {}),
+      channel: "chromium",
+      headless: true,
+      args: [
+        `--disable-extensions-except=${extension}`,
+        `--load-extension=${extension}`,
+      ],
+    }
+  )
   worker =
     context.serviceWorkers()[0] ?? (await context.waitForEvent("serviceworker"))
 }
@@ -44,7 +49,20 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await context?.close()
 })
-test.beforeEach(async () => {
+const windowTest =
+  "popup manages projects and opens standalone windows to add and edit logins"
+test.afterEach(async ({}, info) => {
+  if (info.title === windowTest) {
+    await context.close()
+    await launch()
+  }
+})
+test.beforeEach(async ({}, info) => {
+  if (info.title === windowTest) {
+    await context.close()
+    await launch(true)
+  }
+
   await fetch(`${backend}/fixture/reset`)
   await worker.evaluate(
     async ({ token, backend }) => {
@@ -221,7 +239,7 @@ test("custom selectors handle fields outside default detection", async () => {
   )
   await page.close()
 })
-test("popup manages projects and opens standalone windows to add and edit logins", async () => {
+test(windowTest, async () => {
   const ui = await popup()
   await ui.getByRole("button", { name: "Project filter", exact: true }).click()
   await ui
@@ -248,6 +266,16 @@ test("popup manages projects and opens standalone windows to add and edit logins
     ui.getByRole("menuitem", { name: /Login$/ }).click(),
   ])
   await expect(newLogin).toHaveURL(/edit-login\.html/)
+  const center = (page: Page) =>
+    page.evaluate(async () => {
+      // @ts-expect-error Chrome extension window API
+      const w = await chrome.windows.getCurrent()
+      return { x: w.left + w.width / 2, y: w.top + w.height / 2 }
+    })
+  const parentCenter = await center(ui),
+    editorCenter = await center(newLogin)
+  expect(Math.abs(editorCenter.x - parentCenter.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(editorCenter.y - parentCenter.y)).toBeLessThanOrEqual(1)
   await expect(ui.getByRole("dialog")).toBeHidden()
   await newLogin.getByLabel("Title", { exact: true }).fill("Browser account")
   await newLogin

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.1 · 2026-11-22
+
+- Create collections from the overview, edit them from their cards, and choose a collection emoji or icon.
+- Personal items and files show who can access them. Category selection and file actions use compact icons.
+- Center the extension login and tools windows over the originating browser window.
+
 ## 1.2.0 · 2026-11-22
 
 - Browse projects and collections as cards. Organize logins within a project or group entire projects together.

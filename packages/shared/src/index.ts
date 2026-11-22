@@ -519,6 +519,7 @@ export function generatePassword(length = 24) {
   return password
 }
 export type Collection = {
+  icon?: string
   project_id?: string | null
   id: string
   name: string

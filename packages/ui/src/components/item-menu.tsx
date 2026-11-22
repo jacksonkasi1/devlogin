@@ -36,7 +36,7 @@ import {
   DropdownMenuItem,
 } from "./dropdown-menu"
 
-const icons = {
+export const categoryIcons = {
   card: CreditCard,
   profile: Contact,
   api: Code,
@@ -88,7 +88,7 @@ export function ItemMenu({
           </DropdownMenuItem>
         )}
         {personalKinds.map((kind) => {
-          const Icon = icons[kind]
+          const Icon = categoryIcons[kind]
           return (
             <DropdownMenuItem key={kind} onClick={() => onCategory(kind)}>
               <Icon className="text-blue-500" /> {categoryNames[kind]}

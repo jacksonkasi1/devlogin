@@ -130,6 +130,7 @@ function Memberships({
               )
             }
           />
+          {g.icon && <ItemIcon small icon={g.icon} folder />}
           {g.name}
         </label>
       ))}

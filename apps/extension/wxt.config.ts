@@ -7,7 +7,7 @@ export default defineConfig({
   manifest: {
     name: "Global Login",
     description: "Shared internal project logins",
-    version: "1.2.0",
+    version: "1.2.1",
     permissions: ["storage", "identity", "tabs", "activeTab", "scripting"],
     // Granted once at install, like a password manager: no per-site prompts.
     host_permissions: ["https://*/*", "http://*/*"],

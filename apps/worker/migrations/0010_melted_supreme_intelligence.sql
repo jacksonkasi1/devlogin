@@ -1,0 +1,1 @@
+ALTER TABLE `collections` ADD `icon` text DEFAULT '' NOT NULL;

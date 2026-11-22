@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { ListFilter } from "lucide-react"
 import type { Collection, SortOrder } from "@workspace/shared"
+import { IconPicker } from "./item-icon"
 import { Button } from "./button"
 import { Input } from "./input"
 import { Popover, PopoverTrigger, PopoverContent } from "./popover"
@@ -27,6 +28,7 @@ export function OrganizationMenu({
   refresh: () => Promise<unknown>
 }) {
   const [name, setName] = useState(""),
+    [icon, setIcon] = useState(""),
     [tag, setTag] = useState(""),
     [editing, setEditing] = useState(false),
     [error, setError] = useState(""),
@@ -42,6 +44,7 @@ export function OrganizationMenu({
         remove
           ? undefined
           : {
+              icon,
               name,
               tag: tag || name,
               ...(!editing && projectId ? { project_id: projectId } : {}),
@@ -49,6 +52,7 @@ export function OrganizationMenu({
       )
       await refresh()
       change(remove ? "" : row.id)
+      setIcon("")
       setName("")
       setTag("")
       setEditing(false)
@@ -100,6 +104,7 @@ export function OrganizationMenu({
             onChange={(e) => {
               change(e.target.value)
               setEditing(false)
+              setIcon("")
               setName("")
               setTag("")
             }}
@@ -128,6 +133,7 @@ export function OrganizationMenu({
                   variant="outline"
                   onClick={() => {
                     setEditing(true)
+                    setIcon(current.icon ?? "")
                     setName(current.name)
                     setTag(current.tag)
                   }}
@@ -135,6 +141,7 @@ export function OrganizationMenu({
                   Edit selected collection
                 </Button>
               )}
+              <IconPicker folder value={icon} onChange={setIcon} />
               <Input
                 placeholder="Collection name"
                 aria-label="Collection name"
