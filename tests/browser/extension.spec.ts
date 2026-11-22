@@ -20,16 +20,19 @@ const fixture = "http://localhost:8798"
 const profile = mkdtempSync(resolve(tmpdir(), "devlogin-browser-"))
 async function launch(nativeWindow = false) {
   const extension = resolve("apps/extension/.output/chrome-mv3")
-  context = await chromium.launchPersistentContext(profile, {
-    // Window-position tests need native window bounds instead of an emulated viewport.
-    ...(nativeWindow ? { viewport: null } : {}),
-    channel: "chromium",
-    headless: true,
-    args: [
-      `--disable-extensions-except=${extension}`,
-      `--load-extension=${extension}`,
-    ],
-  })
+  context = await chromium.launchPersistentContext(
+    nativeWindow ? "" : profile,
+    {
+      // Window-position tests need native window bounds instead of an emulated viewport.
+      ...(nativeWindow ? { viewport: null } : {}),
+      channel: "chromium",
+      headless: true,
+      args: [
+        `--disable-extensions-except=${extension}`,
+        `--load-extension=${extension}`,
+      ],
+    }
+  )
   worker =
     context.serviceWorkers()[0] ?? (await context.waitForEvent("serviceworker"))
 }
