@@ -18,11 +18,11 @@ let extensionId: string
 const backend = "http://localhost:8799"
 const fixture = "http://localhost:8798"
 const profile = mkdtempSync(resolve(tmpdir(), "devlogin-browser-"))
-async function launch() {
+async function launch(nativeWindow = false) {
   const extension = resolve("apps/extension/.output/chrome-mv3")
   context = await chromium.launchPersistentContext(profile, {
     // Window-position tests need native window bounds instead of an emulated viewport.
-    viewport: null,
+    ...(nativeWindow ? { viewport: null } : {}),
     channel: "chromium",
     headless: true,
     args: [
@@ -46,7 +46,20 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await context?.close()
 })
-test.beforeEach(async () => {
+const windowTest =
+  "popup manages projects and opens standalone windows to add and edit logins"
+test.afterEach(async ({}, info) => {
+  if (info.title === windowTest) {
+    await context.close()
+    await launch()
+  }
+})
+test.beforeEach(async ({}, info) => {
+  if (info.title === windowTest) {
+    await context.close()
+    await launch(true)
+  }
+
   await fetch(`${backend}/fixture/reset`)
   await worker.evaluate(
     async ({ token, backend }) => {
@@ -223,7 +236,7 @@ test("custom selectors handle fields outside default detection", async () => {
   )
   await page.close()
 })
-test("popup manages projects and opens standalone windows to add and edit logins", async () => {
+test(windowTest, async () => {
   const ui = await popup()
   await ui.getByRole("button", { name: "Project filter", exact: true }).click()
   await ui
