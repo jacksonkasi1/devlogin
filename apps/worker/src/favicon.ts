@@ -81,6 +81,7 @@ export async function declaredFavicon(
         return
       }
     }
+    let iconScore = -1
     let icon: string | undefined,
       touch: string | undefined,
       mask: string | undefined
@@ -97,7 +98,25 @@ export async function declaredFavicon(
         element(el) {
           const rel = el.getAttribute("rel")!.toLowerCase().split(/\s+/)
           const href = resolve(el.getAttribute("href"))
-          if (rel.includes("icon")) icon ??= href
+          if (rel.includes("icon") && href) {
+            const sizes = el.getAttribute("sizes") ?? ""
+            const size = Math.max(
+              0,
+              ...Array.from(sizes.matchAll(/(\d+)x(\d+)/gi), (m) =>
+                Math.min(Number(m[1]), Number(m[2]))
+              )
+            )
+            const score =
+              /svg/i.test(el.getAttribute("type") ?? "") ||
+              /\.svg$/i.test(new URL(href).pathname)
+                ? 512
+                : Math.min(256, size) ||
+                  (/\.ico$/i.test(new URL(href).pathname) ? 1 : 16)
+            if (score > iconScore) {
+              icon = href
+              iconScore = score
+            }
+          }
           if (rel.some((r) => r.startsWith("apple-touch-icon"))) touch ??= href
           if (rel.includes("mask-icon")) mask ??= href
           if (rel.includes("manifest")) manifest ??= href
@@ -130,7 +149,7 @@ export async function declaredFavicon(
       })
       .transform(new Response(html))
       .text()
-    if (icon || touch) return icon ?? touch
+    if (icon || touch) return iconScore >= 128 ? icon : (touch ?? icon)
     if (manifest) {
       try {
         const response = await fetch(manifest, {

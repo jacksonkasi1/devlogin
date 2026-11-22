@@ -2,6 +2,7 @@ import { browser } from "wxt/browser"
 
 export type UiSettings = {
   theme: "light" | "dark" | "system"
+  floatingLogin?: boolean
   submitAfterFill: boolean
 }
 
@@ -9,6 +10,7 @@ export async function readUiSettings(): Promise<UiSettings> {
   const { uiSettings } = await browser.storage.local.get("uiSettings")
   const value = uiSettings as Partial<UiSettings> | undefined
   return {
+    floatingLogin: value?.floatingLogin !== false,
     theme:
       value?.theme === "light" || value?.theme === "dark"
         ? value.theme
@@ -33,6 +35,7 @@ export async function saveUiSettings(patch: Partial<UiSettings>) {
   )
     throw new Error("Invalid autofill setting")
   const settings = {
+    floatingLogin: patch.floatingLogin ?? current.floatingLogin,
     theme: patch.theme ?? current.theme,
     submitAfterFill: patch.submitAfterFill ?? current.submitAfterFill,
   }
