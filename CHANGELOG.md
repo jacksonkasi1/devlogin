@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.3 · 2026-11-22
+
+- Refined the Other logins tab with curved shoulders and an aligned chevron.
+
 ## 1.1.2 · 2026-11-22
 
 - The floating prompt now shows the login title and username on separate lines. Other logins opens a searchable panel with keyboard selection.

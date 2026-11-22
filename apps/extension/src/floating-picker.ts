@@ -38,7 +38,7 @@ export function floatingPicker(
   const action = submit ? "Sign in" : "Fill login"
   const bar = element("div", "fp-bar")
   const primary = element("button", "fp-action", action)
-  const other = element("button", "fp-other", "Other logins ⌄")
+  const other = element("button", "fp-other", "Other logins")
   const close = () => {
     const button = element("button", "fp-close", "×")
     button.setAttribute("aria-label", "Dismiss floating login")
