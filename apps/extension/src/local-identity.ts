@@ -69,11 +69,13 @@ export async function matchPage(
   )
   if (!eligible.length) return { project: undefined, identity: undefined }
   const identity = await tabIdentity(tabId)
-  // One project on this port: nothing to disambiguate, so no manual step is needed.
-  if (eligible.length === 1) return { project: eligible[0], identity }
   const { localBindings = [] } =
     await browser.storage.local.get("localBindings")
-  const bindings = localBindings as LocalBinding[]
+  const bindings = (localBindings as LocalBinding[]).filter(
+    (binding) =>
+      binding.origin === new URL(address).origin &&
+      eligible.some((p) => p.id === binding.projectId)
+  )
   const matches = eligible.filter(
     (project) =>
       matchProject([project], address) &&
@@ -84,7 +86,9 @@ export async function matchPage(
           sameIdentity(binding.identity, identity)
       )
   )
-  if (matches.length === 1) return { project: matches[0], identity }
+  if (bindings.length)
+    return { project: matches.length === 1 ? matches[0] : undefined, identity }
+  if (eligible.length === 1) return { project: eligible[0], identity }
   // Several projects share this port: recognise the running one by its declared name.
   const declared = [identity.application, identity.site, identity.title]
     .join(" ")

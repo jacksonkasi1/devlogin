@@ -43,11 +43,15 @@ export function logMatchingAccounts(
       .where(where)
   )
 }
-function matchesTags(oldTag: string, newTag: string) {
-  return sql`exists(select 1 from json_each(${accounts.tags}) where lower(value) in (lower(${oldTag}),lower(${newTag}))) or exists(select 1 from json_each(${projects.tags}) where lower(value) in (lower(${oldTag}),lower(${newTag})))`
+function matchesTags(oldTag: string, newTag: string, scope?: string | null) {
+  return and(
+    scope ? eq(accounts.project_id, scope) : undefined,
+    sql`exists(select 1 from json_each(${accounts.tags}) where lower(value) in (lower(${oldTag}),lower(${newTag}))) or exists(select 1 from json_each(${projects.tags}) where lower(value) in (lower(${oldTag}),lower(${newTag})))`
+  )!
 }
 export const organization = new Hono<AppEnv>()
 const group = z.object({
+  project_id: z.string().min(1).nullable().optional(),
   name: z.string().trim().min(1).max(64),
   tag: z.string().trim().min(1).max(48),
 })
@@ -94,7 +98,11 @@ for (const method of ["post", "put"] as const)
         write,
         logMatchingAccounts(
           c,
-          matchesTags(prior?.tag ?? data.tag, data.tag),
+          matchesTags(
+            prior?.tag ?? data.tag,
+            data.tag,
+            data.project_id ?? prior?.project_id
+          ),
           "Collection updated",
           [data.name]
         ),
@@ -114,7 +122,7 @@ organization.delete("/collections/:id", editor, async (c) => {
     db.delete(collections).where(eq(collections.id, id)).returning(),
     logMatchingAccounts(
       c,
-      matchesTags(group.tag, group.tag),
+      matchesTags(group.tag, group.tag, group.project_id),
       "Collection removed",
       [group.name]
     ),

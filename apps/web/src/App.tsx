@@ -482,6 +482,15 @@ export function App() {
               setMobilePanel={setMobilePanel}
               moving={moving}
               refreshGroups={refresh}
+              openPersonal={(destination) => {
+                if (destination === "files") {
+                  setTab("files")
+                  return
+                }
+                setTool(destination === "generator" ? "generator" : undefined)
+                setToolKey((k) => k + 1)
+                setTab("tools")
+              }}
               onRefreshIcon={(id) => void refetchIcons(id)}
               onMove={(account, project) => void moveLogin(account, project)}
             />

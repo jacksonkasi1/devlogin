@@ -121,6 +121,7 @@ export const personalItems = sqliteTable("personal_items", {
 })
 
 export const attachments = sqliteTable("attachments", {
+  account_id: text().references(() => accounts.id, { onDelete: "set null" }),
   id: text().primaryKey(),
   owner_id: text()
     .notNull()
@@ -130,6 +131,7 @@ export const attachments = sqliteTable("attachments", {
   created_at: text().notNull(),
 })
 export const collections = sqliteTable("collections", {
+  project_id: text().references(() => projects.id, { onDelete: "cascade" }),
   id: text().primaryKey(),
   name: text().notNull().unique(),
   tag: text().notNull(),

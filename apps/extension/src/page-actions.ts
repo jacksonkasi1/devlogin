@@ -40,14 +40,16 @@ export function pageActions(deps: {
   // Content scripts now run on every tab; cache the profile so tabs do not each poll it.
   let meCache: { at: number; value: Me } | null = null
   type Me = { is_admin: boolean; can_edit: boolean; approved: boolean }
-  async function profile() {
-    if (meCache && Date.now() - meCache.at < 60_000) return meCache.value
+  async function profile(fresh: boolean) {
+    if (!fresh && meCache && Date.now() - meCache.at < 60_000)
+      return meCache.value
     const value = await deps.api<Me>("/api/me")
     meCache = { at: Date.now(), value }
     return value
   }
   async function page(
-    sender: Browser.runtime.MessageSender
+    sender: Browser.runtime.MessageSender,
+    freshProfile: boolean
   ): Promise<PageContext> {
     if (sender.frameId !== 0 || !sender.tab?.id || !sender.url)
       throw new Error("Unsupported page")
@@ -68,7 +70,7 @@ export function pageActions(deps: {
       sender.tab.id
     )
     const project = matched.project ?? null
-    const me = await profile()
+    const me = await profile(freshProfile)
     if (!me.approved) {
       candidates.delete(sender.tab.id)
       meCache = null
@@ -109,7 +111,10 @@ export function pageActions(deps: {
     sender: Browser.runtime.MessageSender
   ) {
     prune()
-    const context = await page(sender)
+    const context = await page(
+      sender,
+      ["observe", "confirm", "pending"].includes(message.type)
+    )
     const tabId = sender.tab!.id!
     switch (message.type) {
       case "page":

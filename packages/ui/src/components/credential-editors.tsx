@@ -1,5 +1,6 @@
-import { useState, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import {
+  type Collection,
   accountSchema,
   projectSchema,
   type Project,
@@ -94,12 +95,55 @@ export function Field({
     </div>
   )
 }
+function Memberships({
+  groups,
+  tags,
+  change,
+}: {
+  groups: Collection[]
+  tags: string
+  change: (value: string) => void
+}) {
+  if (!groups.length) return null
+  const values = tags
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean)
+  return (
+    <fieldset className="collection-members">
+      <legend>Collections</legend>
+      {groups.map((g) => (
+        <label key={g.id}>
+          <input
+            type="checkbox"
+            checked={values.some(
+              (v) => v.toLowerCase() === g.tag.toLowerCase()
+            )}
+            onChange={(e) =>
+              change(
+                (e.target.checked
+                  ? [...values, g.tag]
+                  : values.filter(
+                      (v) => v.toLowerCase() !== g.tag.toLowerCase()
+                    )
+                ).join(", ")
+              )
+            }
+          />
+          {g.name}
+        </label>
+      ))}
+    </fieldset>
+  )
+}
 export function ProjectEditor({
   project,
+  groups = [],
   onSave,
   onCancel,
   busy,
 }: {
+  groups?: Collection[]
   project?: Project
   website?: string
   onSave: (body: unknown) => void
@@ -136,6 +180,11 @@ export function ProjectEditor({
         })
       }}
     >
+      <Memberships
+        groups={groups.filter((g) => !g.project_id)}
+        tags={tags}
+        change={setTags}
+      />
       <IconPicker value={icon} onChange={setIcon} folder />
       <Field
         name="tags"
@@ -179,6 +228,9 @@ export function ProjectEditor({
 }
 export function AccountEditor({
   account,
+  attachments,
+  groups = [],
+  loadPassword,
   projectId,
   environments = [],
   projects = [],
@@ -187,6 +239,9 @@ export function AccountEditor({
   onCancel,
   busy,
 }: {
+  attachments?: ReactNode
+  groups?: Collection[]
+  loadPassword?: () => Promise<string>
   account?: Account
   projectId: string
   environments?: string[]
@@ -213,6 +268,48 @@ export function AccountEditor({
         : (website ? [website] : environments).map((url) => ({ url })))
   )
   const [show, setShow] = useState(false)
+  const [stored, setStored] = useState("")
+  const [reading, setReading] = useState(false)
+  useEffect(() => {
+    if (!stored) return
+    const hide = () => {
+      setStored("")
+      setShow(false)
+    }
+    const timer = setTimeout(hide, 30000)
+    document.addEventListener("visibilitychange", hide)
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener("visibilitychange", hide)
+    }
+  }, [stored])
+  async function readSecret(copy: boolean) {
+    if (!copy && show) {
+      setShow(false)
+      setStored("")
+      return
+    }
+    setReading(true)
+    try {
+      const value =
+        password ||
+        stored ||
+        (account?.login_type === "password" && loadPassword
+          ? await loadPassword()
+          : "")
+      if (copy) await copyCredential(value, "Password")
+      else {
+        if (!password) setStored(value)
+        setShow(true)
+      }
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Could not retrieve password"
+      )
+    } finally {
+      setReading(false)
+    }
+  }
   const updateSite = (index: number, change: Partial<Website>) =>
     setWebsites((items) =>
       items.map((site, i) => (i === index ? { ...site, ...change } : site))
@@ -277,8 +374,17 @@ export function AccountEditor({
                 <Input
                   id="password"
                   type={show ? "text" : "password"}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder={
+                    account?.login_type === "password"
+                      ? "••••••••••••"
+                      : undefined
+                  }
+                  disabled={reading}
+                  value={password || stored}
+                  onChange={(event) => {
+                    setStored("")
+                    setPassword(event.target.value)
+                  }}
                   autoComplete="new-password"
                   required={!account || account.login_type === "google"}
                 />
@@ -287,7 +393,8 @@ export function AccountEditor({
                   variant="ghost"
                   size="icon"
                   aria-label={show ? "Hide password" : "Show password"}
-                  onClick={() => setShow(!show)}
+                  disabled={reading}
+                  onClick={() => void readSecret(false)}
                 >
                   {show ? <EyeOff /> : <Eye />}
                 </Button>
@@ -296,8 +403,8 @@ export function AccountEditor({
                   variant="ghost"
                   size="icon"
                   aria-label="Copy password"
-                  disabled={!password}
-                  onClick={() => void copyCredential(password, "Password")}
+                  disabled={reading || (!password && !loadPassword)}
+                  onClick={() => void readSecret(true)}
                 >
                   <Copy />
                 </Button>
@@ -434,6 +541,14 @@ export function AccountEditor({
           value={tags}
           onChange={setTags}
         />
+        <Memberships
+          groups={groups.filter(
+            (g) => !g.project_id || g.project_id === selectedProject
+          )}
+          tags={tags}
+          change={setTags}
+        />
+        {attachments}
         <div className="login-editor-notes">
           <Label htmlFor="notes">Notes</Label>
           <Textarea

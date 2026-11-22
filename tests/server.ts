@@ -83,8 +83,12 @@ Bun.serve({
     if (url.pathname === "/fixture/token") return Response.json({ token })
     if (url.pathname === "/fixture/reset") {
       db.sqlite.exec("DELETE FROM preferences")
-      db.sqlite.exec("DELETE FROM projects WHERE id != 'fixture-project'")
       db.sqlite.exec("DELETE FROM accounts WHERE id != 'fixture-account'")
+      db.sqlite.exec(
+        "UPDATE accounts SET project_id = 'fixture-project', tags = '[]' WHERE id = 'fixture-account'"
+      )
+      db.sqlite.exec("DELETE FROM projects WHERE id != 'fixture-project'")
+      db.sqlite.exec("DELETE FROM collections")
       db.sqlite.exec(
         "UPDATE accounts SET is_default = 1 WHERE id = 'fixture-account'"
       )

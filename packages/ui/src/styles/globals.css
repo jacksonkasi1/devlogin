@@ -581,3 +581,161 @@
     transition: none;
   }
 }
+
+.vault-login-dialog {
+  height: min(760px, 88dvh);
+  max-height: calc(100dvh - 24px);
+}
+.vault-login-dialog .vault-editor-fieldset {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1;
+  overflow: hidden;
+}
+.vault-login-dialog .login-editor {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+.vault-login-dialog .login-editor-fields {
+  display: flex;
+  flex-direction: column;
+  overscroll-behavior: contain;
+}
+.login-editor-fields > * {
+  flex-shrink: 0;
+}
+.login-files,
+.collection-members {
+  display: grid;
+  gap: 9px;
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--muted);
+  font-size: 13px;
+}
+.collection-members label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.library-overview {
+  padding: clamp(20px, 3vw, 48px);
+  min-height: 100%;
+  background: var(--background);
+}
+.library-overview header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+.library-overview header > div {
+  flex: 1;
+  min-width: 140px;
+}
+.library-overview h1 {
+  font-size: clamp(23px, 2.2vw, 34px);
+  font-weight: 660;
+  line-height: 1.12;
+  letter-spacing: -0.04em;
+}
+.library-overview p,
+.library-description,
+.library-card footer {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.library-overview header p {
+  margin-top: 5px;
+}
+.library-emblem,
+.library-tile {
+  display: inline-grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--primary) 13%, var(--card));
+  color: var(--vault-label);
+}
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(210px, 100%), 1fr));
+  gap: 14px;
+}
+.library-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: left;
+  min-width: 0;
+  padding: 18px 18px 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.library-card:hover,
+.library-card:focus-visible {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 5%, var(--card));
+}
+.library-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted-foreground);
+  margin-bottom: 17px;
+}
+.library-card strong {
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.library-description {
+  margin: 4px 0 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-height: 1.4em;
+}
+.library-card footer {
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 0;
+}
+.library-nav-heading {
+  font-size: 11px;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  font-weight: 650;
+  padding: 5px 12px;
+}
+
+.library-tile [data-slot="item-icon"] {
+  background: transparent;
+  border: 0;
+  font-size: 22px;
+  color: inherit;
+}
+.library-card .library-description {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.library-card:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.library-tile {
+  background: var(--accent);
+  color: var(--vault-label);
+}

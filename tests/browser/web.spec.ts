@@ -153,7 +153,7 @@ test("projects filter immediately; secrets, search and detail selection stay in 
   const accounts = page.getByRole("region", { name: "Accounts", exact: true })
   const details = page.getByRole("region", { name: "Account details" })
   await expect(
-    details.getByText("Select an account", { exact: true })
+    details.getByRole("heading", { name: "Projects", exact: true })
   ).toBeVisible()
   await page.getByRole("button", { name: "Fixture app 1" }).click()
   await expect(
@@ -614,4 +614,65 @@ test("login editor manages websites, notes, icons and project assignment", async
   expect(login.websites).toHaveLength(2)
   expect(login.project_id).toBe("fixture-project")
   await page.screenshot({ path: "test-results/devlogin-folders-logins.png" })
+})
+
+test("short login editor keeps Save visible and reveals the stored password on demand", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 920, height: 520 })
+  await page.goto(backend)
+  await page.getByRole("button", { name: /Fixture account/ }).click()
+  await page.getByRole("button", { name: "Edit", exact: true }).click()
+  const dialog = page.getByRole("dialog")
+  const secret = dialog.getByLabel("Password", { exact: true })
+  await expect(secret).toHaveValue("")
+  await dialog.getByRole("button", { name: "Show password" }).click()
+  await expect(secret).toHaveValue("fixture-password")
+  await dialog.getByRole("button", { name: "Hide password" }).click()
+  await expect(secret).toHaveValue("")
+  await dialog.getByLabel("Notes", { exact: true }).scrollIntoViewIfNeeded()
+  await expect(
+    dialog.getByRole("button", { name: "Save Login" })
+  ).toBeInViewport({ ratio: 1 })
+  await expect(
+    dialog.getByRole("heading", { name: "My attachments" })
+  ).toBeAttached()
+})
+
+test("collection cards drill down through projects to matching logins", async ({
+  page,
+  request,
+}) => {
+  const { token } = await (await request.get(backend + "/fixture/token")).json()
+  const headers = { Authorization: "Bearer " + token }
+  await request.post(backend + "/api/collections", {
+    headers,
+    data: {
+      name: "Deployment",
+      tag: "production",
+      project_id: "fixture-project",
+    },
+  })
+  const accountsBefore = await (
+    await request.get(backend + "/api/accounts", { headers })
+  ).json()
+  const updated = await request.put(backend + "/api/accounts/fixture-account", {
+    headers,
+    data: {
+      ...accountsBefore.find((a: { id: string }) => a.id === "fixture-account"),
+      tags: ["production"],
+    },
+  })
+  await page.goto(backend)
+  expect(updated.ok()).toBeTruthy()
+  await page.getByRole("button", { name: "Collections", exact: true }).click()
+  await page.getByRole("button", { name: /Deployment.*1 project/ }).click()
+  await page.locator(".library-card").filter({ hasText: "Fixture app" }).click()
+  const accounts = page.getByRole("region", { name: "Accounts", exact: true })
+  await expect(
+    accounts.getByRole("heading", { name: "Deployment" })
+  ).toBeVisible()
+  await expect(
+    accounts.getByRole("button", { name: /Fixture account/ })
+  ).toBeVisible()
 })
