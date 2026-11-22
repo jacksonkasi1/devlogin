@@ -2,7 +2,7 @@
 
 Global Login gives your team a shared place for project logins and each member a private vault. Organize accounts on the web, then use the Chrome or Brave extension to fill the right login on a project site.
 
-[Open the dashboard](https://globallogin.peacockindia.in) · [Download the extension](https://github.com/jacksonkasi1/devlogin/releases/latest) · [Self-hosting and upgrades](SELF_HOSTING.md)
+[Open the dashboard](https://globallogin.peacockindia.in) · [Install the Chrome extension](https://chromewebstore.google.com/detail/global-login/imfpfomcpgonkjjlaaeginadicnanoeb) · [Self-hosting and upgrades](SELF_HOSTING.md)
 
 ![Global Login product tour showing extension onboarding, the browser vault, the Add item menu, private vault categories, and the web project grid](docs/images/global-login-tour.gif)
 
@@ -20,7 +20,7 @@ Global Login gives your team a shared place for project logins and each member a
 ## Get started
 
 1. **Sign in.** Open the dashboard with Google. A workspace administrator approves new members.
-2. **Install the extension.** Download the Chrome ZIP from the latest release and extract it. In Chrome or Brave, open the extensions page, enable **Developer mode**, and choose **Load unpacked**. Select the extracted folder containing `manifest.json`.
+2. **Install the extension.** [Open Global Login in the Chrome Web Store](https://chromewebstore.google.com/detail/global-login/imfpfomcpgonkjjlaaeginadicnanoeb) and choose **Add to Chrome**. For a manual installation, download the Chrome ZIP from the [latest release](https://github.com/jacksonkasi1/devlogin/releases/latest) and extract it. In Chrome or Brave, open the extensions page, enable **Developer mode**, and choose **Load unpacked**. Select the extracted folder containing `manifest.json`.
 3. **Connect your workspace.** Open Global Login and choose **Continue with Google**. For a self-hosted workspace, set the backend URL in extension **Settings** first. Its administrator must allowlist the extension ID shown by your browser.
 4. **Use a login.** Open a saved project site, focus its login field, and choose an account. Use **My private vault** for items you want to keep personal.
 
