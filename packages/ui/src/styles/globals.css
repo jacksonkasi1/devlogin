@@ -739,3 +739,20 @@
   background: var(--accent);
   color: var(--vault-label);
 }
+.vault-personal-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding-block: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.vault-personal-heading > svg {
+  color: var(--vault-label);
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+.vault-personal-heading p {
+  margin-top: 4px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}

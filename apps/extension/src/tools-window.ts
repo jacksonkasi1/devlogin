@@ -1,3 +1,4 @@
+import { openCenteredWindow } from "./centered-window"
 import { browser } from "wxt/browser"
 export function openTools(kind: string, tabId?: number, address?: string) {
   const url = new URL(browser.runtime.getURL("/tools.html"))
@@ -6,10 +7,5 @@ export function openTools(kind: string, tabId?: number, address?: string) {
     url.searchParams.set("tab", String(tabId))
     url.searchParams.set("origin", new URL(address).origin)
   }
-  return browser.windows.create({
-    url: url.href,
-    type: "popup",
-    width: 520,
-    height: 690,
-  })
+  return openCenteredWindow(url, 520, 690, tabId)
 }

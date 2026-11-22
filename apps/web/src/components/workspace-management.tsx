@@ -394,9 +394,6 @@ export function ProjectsView({
       query={query}
       admin={admin}
       group={group}
-      setGroup={setGroup}
-      sort={sort}
-      setSort={setSort}
       request={orgRequest}
       refreshGroups={refreshGroups}
       createProject={() => setEditor({ kind: "project" })}

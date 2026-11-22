@@ -676,3 +676,34 @@ test("collection cards drill down through projects to matching logins", async ({
     accounts.getByRole("button", { name: /Fixture account/ })
   ).toBeVisible()
 })
+
+test("collection creation and edit actions are visible on a narrow screen", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 620 })
+  await page.goto(backend)
+  await page.getByRole("button", { name: "Collections", exact: true }).click()
+  await page.getByRole("button", { name: "New collection" }).click()
+  const form = page.getByRole("dialog", { name: "New collection" })
+  await form.getByLabel("Collection name").fill("Build services")
+  await form.getByRole("button", { name: "Change Icon", exact: true }).click()
+  await page.getByRole("button", { name: "Use 🚀 icon", exact: true }).click()
+  await form.getByRole("button", { name: "Create collection" }).click()
+  await page
+    .getByRole("button", { name: "Edit Build services", exact: true })
+    .click()
+  const edit = page.getByRole("dialog", { name: "Edit collection" })
+  await expect(
+    edit.getByRole("button", { name: "Change icon preview" })
+  ).toHaveText("🚀")
+  await edit.getByLabel("Collection name").fill("Deployment tools")
+  await edit.getByRole("button", { name: "Save changes" }).click()
+  await expect(
+    page.getByRole("button", { name: "Edit Deployment tools", exact: true })
+  ).toBeVisible()
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth
+    )
+  ).toBe(true)
+})

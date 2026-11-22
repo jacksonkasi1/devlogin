@@ -21,6 +21,8 @@ const profile = mkdtempSync(resolve(tmpdir(), "devlogin-browser-"))
 async function launch() {
   const extension = resolve("apps/extension/.output/chrome-mv3")
   context = await chromium.launchPersistentContext(profile, {
+    // Window-position tests need native window bounds instead of an emulated viewport.
+    viewport: null,
     channel: "chromium",
     headless: true,
     args: [
@@ -248,6 +250,16 @@ test("popup manages projects and opens standalone windows to add and edit logins
     ui.getByRole("menuitem", { name: /Login$/ }).click(),
   ])
   await expect(newLogin).toHaveURL(/edit-login\.html/)
+  const center = (page: Page) =>
+    page.evaluate(async () => {
+      // @ts-expect-error Chrome extension window API
+      const w = await chrome.windows.getCurrent()
+      return { x: w.left + w.width / 2, y: w.top + w.height / 2 }
+    })
+  const parentCenter = await center(ui),
+    editorCenter = await center(newLogin)
+  expect(Math.abs(editorCenter.x - parentCenter.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(editorCenter.y - parentCenter.y)).toBeLessThanOrEqual(1)
   await expect(ui.getByRole("dialog")).toBeHidden()
   await newLogin.getByLabel("Title", { exact: true }).fill("Browser account")
   await newLogin

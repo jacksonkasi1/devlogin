@@ -190,6 +190,8 @@ Open **Project grid** to browse project cards. Use **Collections** to browse acr
 
 ### Chrome Web Store screenshots
 
+[View and download the full screenshot set](https://devlogin.peacockindia.in/store/index.html). The original PNGs are in [the store folder](apps/web/public/store).
+
 These 1280 × 800 PNGs use an isolated demonstration vault with masked identifiers.
 
 ![Global Login browser vault](apps/web/public/store/vault.png)

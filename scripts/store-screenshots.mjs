@@ -92,6 +92,13 @@ try {
     await cover.locator("img").evaluate((img) => img.decode())
     await cover.screenshot({ path: out + "/" + name + ".png" })
   }
+  await cover.goto(root + "/tools.html?kind=browse")
+  await cover.getByRole("combobox", { name: "Category" }).click()
+  await cover.getByRole("option", { name: "Secure Note" }).waitFor()
+  await cover.screenshot({
+    path: out + "/private-vault.png",
+    animations: "disabled",
+  })
   for (const [name, icon, description] of [
     ["Developer portal", "💻", "Local and staging environments"],
     ["Release console", "🚀", "Deployment and build services"],

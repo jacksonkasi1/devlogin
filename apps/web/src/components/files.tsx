@@ -1,7 +1,22 @@
-import { useState, useEffect } from "react"
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuItem,
+  DropdownMenuContent,
+} from "@workspace/ui/components/dropdown-menu"
+import { useState, useEffect, useRef } from "react"
 import { apiRequest } from "@workspace/shared"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
+import {
+  File,
+  Upload,
+  Paperclip,
+  Pencil,
+  Trash2,
+  Unlink,
+  LockKeyhole,
+} from "lucide-react"
 type FileInfo = {
   id: string
   name: string
@@ -10,6 +25,7 @@ type FileInfo = {
 }
 const list = () => apiRequest<FileInfo[]>("", "/api/files")
 export function Files({ accountId }: { accountId?: string } = {}) {
+  const picker = useRef<HTMLInputElement>(null)
   const [rows, setRows] = useState<FileInfo[]>([]),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false)
@@ -52,69 +68,99 @@ export function Files({ accountId }: { accountId?: string } = {}) {
     <section
       className={accountId ? "login-files" : "mx-auto grid max-w-2xl gap-4 p-6"}
     >
-      <h2 className="font-semibold">
-        {accountId ? "My attachments" : "File attachments"}
-      </h2>
-      <label>
-        Upload a private file (up to 50 MB)
-        <Input
-          type="file"
+      <header className="flex flex-wrap items-center gap-2">
+        <Paperclip size={16} />
+        <h2 className="mr-auto font-semibold">
+          {accountId ? "My attachments" : "File attachments"}
+        </h2>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
           disabled={busy}
-          onChange={(e) => {
-            const f = e.target.files?.[0]
-            e.target.value = ""
-            if (!f) return
-            if (f.size > 50 * 1024 * 1024) {
-              setError("Maximum file size is 50 MB")
-              return
-            }
-            void act(async () => {
-              const res = await fetch(
-                "/api/files?name=" +
-                  encodeURIComponent(f.name) +
-                  (accountId
-                    ? "&account=" + encodeURIComponent(accountId)
-                    : ""),
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/octet-stream" },
-                  body: f,
-                }
-              )
-              if (!res.ok)
-                throw new Error(
-                  (await res.json().catch(() => ({}))).error ?? "Upload failed"
-                )
-            })
-          }}
-        />
-      </label>
-      {accountId && rows.some((f) => !f.account_id) && (
-        <select
-          className="w-full rounded border bg-background p-2"
-          aria-label="Attach existing private file"
-          value=""
-          disabled={busy}
-          onChange={(e) => {
-            const id = e.target.value
-            if (id)
-              void act(() =>
-                apiRequest("", "/api/files/" + id, {
-                  method: "PATCH",
-                  body: JSON.stringify({ account_id: accountId }),
-                })
-              )
-          }}
+          onClick={() => picker.current?.click()}
         >
-          <option value="">Attach existing private file…</option>
-          {rows
-            .filter((f) => !f.account_id)
-            .map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.name}
-              </option>
-            ))}
-        </select>
+          <Upload />
+          Upload file
+        </Button>
+      </header>
+      <p className="flex items-start gap-2 text-xs text-muted-foreground">
+        <LockKeyhole size={13} className="shrink-0" />
+        Only you can access these files. Up to 50 MB per file.
+      </p>
+      <input
+        ref={picker}
+        hidden
+        aria-label="Upload a private file"
+        type="file"
+        disabled={busy}
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          e.target.value = ""
+          if (!f) return
+          if (f.size > 50 * 1024 * 1024) {
+            setError("Maximum file size is 50 MB")
+            return
+          }
+          void act(async () => {
+            const res = await fetch(
+              "/api/files?name=" +
+                encodeURIComponent(f.name) +
+                (accountId ? "&account=" + encodeURIComponent(accountId) : ""),
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/octet-stream" },
+                body: f,
+              }
+            )
+            if (!res.ok)
+              throw new Error(
+                (await res.json().catch(() => ({}))).error ?? "Upload failed"
+              )
+          })
+        }}
+      />
+
+      {accountId && rows.some((f) => !f.account_id) && (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                className="justify-self-start"
+              />
+            }
+          >
+            <Paperclip />
+            Attach existing file
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            className="max-h-64 max-w-[min(20rem,85vw)] overflow-y-auto"
+          >
+            {rows
+              .filter((f) => !f.account_id)
+              .map((f) => (
+                <DropdownMenuItem
+                  key={f.id}
+                  onClick={() =>
+                    void act(() =>
+                      apiRequest("", "/api/files/" + f.id, {
+                        method: "PATCH",
+                        body: JSON.stringify({ account_id: accountId }),
+                      })
+                    )
+                  }
+                >
+                  <File />
+                  <span className="truncate">{f.name}</span>
+                </DropdownMenuItem>
+              ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
       {busy && <p role="status">Working…</p>}
       {error && <p role="alert">{error}</p>}
@@ -149,16 +195,20 @@ export function Files({ accountId }: { accountId?: string } = {}) {
               </>
             ) : (
               <a
-                className="mr-auto text-primary underline"
+                className="mr-auto inline-flex max-w-full min-w-0 items-center gap-2 text-primary hover:underline"
                 href={"/api/files/" + f.id}
                 download
               >
-                {f.name}
+                <File size={15} className="shrink-0" />
+                <span className="truncate">{f.name}</span>
               </a>
             )}
             <small>{Math.ceil(f.size / 1024)} KB</small>
             <Button
               type="button"
+              size="icon-sm"
+              title={"Rename " + f.name}
+              aria-label={"Rename " + f.name}
               variant="ghost"
               disabled={busy}
               onClick={() => {
@@ -166,10 +216,19 @@ export function Files({ accountId }: { accountId?: string } = {}) {
                 setName(f.name)
               }}
             >
-              Rename
+              <Pencil />
             </Button>
             <Button
               type="button"
+              size={remove === f.id ? "sm" : "icon-sm"}
+              title={accountId ? "Detach file" : "Delete file"}
+              aria-label={
+                (accountId
+                  ? "Detach "
+                  : remove === f.id
+                    ? "Confirm delete "
+                    : "Delete ") + f.name
+              }
               variant="ghost"
               disabled={busy}
               onClick={() => {
@@ -191,11 +250,13 @@ export function Files({ accountId }: { accountId?: string } = {}) {
                 )
               }}
             >
-              {accountId
-                ? "Detach"
-                : remove === f.id
-                  ? "Confirm delete"
-                  : "Delete"}
+              {accountId ? (
+                <Unlink />
+              ) : remove === f.id ? (
+                "Confirm delete"
+              ) : (
+                <Trash2 />
+              )}
             </Button>
           </div>
         ))}

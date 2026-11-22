@@ -131,6 +131,7 @@ export const attachments = sqliteTable("attachments", {
   created_at: text().notNull(),
 })
 export const collections = sqliteTable("collections", {
+  icon: text().notNull().default(""),
   project_id: text().references(() => projects.id, { onDelete: "cascade" }),
   id: text().primaryKey(),
   name: text().notNull().unique(),

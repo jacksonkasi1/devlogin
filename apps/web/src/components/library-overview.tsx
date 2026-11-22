@@ -3,18 +3,19 @@ import {
   type Collection,
   type Project,
   type Sync,
-  type SortOrder,
 } from "@workspace/shared"
 import {
   LayoutGrid,
   Layers,
   Plus,
   ArrowUpRight,
+  Pencil,
   KeyRound,
   Folder,
 } from "lucide-react"
 import { Button } from "@workspace/ui/components/button"
-import { OrganizationMenu } from "@workspace/ui/components/organization"
+import { useState } from "react"
+import { CollectionEditor } from "./collection-editor"
 import { ItemIcon } from "@workspace/ui/components/item-icon"
 
 export function LibraryOverview({
@@ -23,9 +24,6 @@ export function LibraryOverview({
   query,
   admin,
   group,
-  setGroup,
-  sort,
-  setSort,
   request,
   refreshGroups,
   createProject,
@@ -37,15 +35,13 @@ export function LibraryOverview({
   query: string
   admin: boolean
   group: string
-  setGroup: (id: string) => void
-  sort: SortOrder
-  setSort: (order: SortOrder) => void
   request: <T>(path: string, method?: string, body?: unknown) => Promise<T>
   refreshGroups: () => Promise<unknown>
   createProject: () => void
   chooseProject: (project: Project) => void
   openCollection: (id: string) => void
 }) {
+  const [editing, setEditing] = useState<Collection | "new" | null>(null)
   const projects = data?.projects ?? []
   const collections: Collection[] = data?.collections ?? []
   const isProjects = kind === "projects"
@@ -85,17 +81,21 @@ export function LibraryOverview({
             New project
           </Button>
         )}
-        {!isProjects && (
-          <OrganizationMenu
-            groups={collections}
-            group={group}
-            change={setGroup}
-            sort={sort}
-            onSort={setSort}
-            editable={admin}
-            request={request}
-            refresh={refreshGroups}
-          />
+        {!isProjects && admin && (
+          <Button size="sm" onClick={() => setEditing("new")}>
+            <Plus />
+            New collection
+          </Button>
+        )}
+        {isProjects && inCollection && admin && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setEditing(inCollection)}
+          >
+            <Pencil />
+            Edit collection
+          </Button>
         )}
       </header>
       <div className="library-grid">
@@ -125,52 +125,65 @@ export function LibraryOverview({
                 matches.some((a) => a.project_id === p.id))
           )
           return (
-            <button
-              className="library-card"
-              key={item.id}
-              onClick={() => {
-                if (isProjects)
-                  chooseProject(projects.find((p) => p.id === item.id)!)
-                else openCollection(item.id)
-              }}
-            >
-              <div className="library-card-top">
-                <span className="library-tile">
-                  {isProjects ? (
-                    <ItemIcon folder icon={"icon" in item ? item.icon : ""} />
-                  ) : (
-                    <Layers />
-                  )}
+            <div key={item.id} className="relative flex min-w-0">
+              <button
+                className="library-card w-full"
+                onClick={() => {
+                  if (isProjects)
+                    chooseProject(projects.find((p) => p.id === item.id)!)
+                  else openCollection(item.id)
+                }}
+              >
+                <div className="library-card-top">
+                  <span className="library-tile">
+                    {isProjects ? (
+                      <ItemIcon folder icon={"icon" in item ? item.icon : ""} />
+                    ) : (
+                      <ItemIcon folder icon={collection?.icon || "folder"} />
+                    )}
+                  </span>
+                  {(!collection || !admin) && <ArrowUpRight size={16} />}
+                </div>
+                <strong>{item.name}</strong>
+                <span className="library-description">
+                  {isProjects
+                    ? ("description" in item && item.description) ||
+                      projects
+                        .find((p) => p.id === item.id)
+                        ?.urls?.map((url) => {
+                          try {
+                            return new URL(url).host
+                          } catch {
+                            return url
+                          }
+                        })
+                        .join(" · ")
+                    : memberProjects.map((p) => p.name).join(" · ")}
                 </span>
-                <ArrowUpRight size={16} />
-              </div>
-              <strong>{item.name}</strong>
-              <span className="library-description">
-                {isProjects
-                  ? ("description" in item && item.description) ||
-                    projects
-                      .find((p) => p.id === item.id)
-                      ?.urls?.map((url) => {
-                        try {
-                          return new URL(url).host
-                        } catch {
-                          return url
-                        }
-                      })
-                      .join(" · ")
-                  : memberProjects.map((p) => p.name).join(" · ")}
-              </span>
-              <footer>
-                {isProjects ? <KeyRound size={14} /> : <Folder size={14} />}{" "}
-                {isProjects
-                  ? matches.length +
-                    (matches.length === 1 ? " login" : " logins")
-                  : memberProjects.length +
-                    " projects · " +
-                    matches.length +
-                    " logins"}
-              </footer>
-            </button>
+                <footer>
+                  {isProjects ? <KeyRound size={14} /> : <Folder size={14} />}{" "}
+                  {isProjects
+                    ? matches.length +
+                      (matches.length === 1 ? " login" : " logins")
+                    : memberProjects.length +
+                      " projects · " +
+                      matches.length +
+                      " logins"}
+                </footer>
+              </button>
+              {collection && admin && (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="absolute top-4 right-4"
+                  aria-label={"Edit " + item.name}
+                  title={"Edit " + item.name}
+                  onClick={() => setEditing(collection)}
+                >
+                  <Pencil />
+                </Button>
+              )}
+            </div>
           )
         })}
       </div>
@@ -182,8 +195,17 @@ export function LibraryOverview({
               ? inCollection
                 ? "Select this collection when editing a project or login to include it here."
                 : "Create a project to organize your first login."
-              : "Create a collection in the collection menu, then select it when editing a project or login."}
+              : "Create your first collection, then select it when editing a project or login."}
         </p>
+      )}
+      {editing && (
+        <CollectionEditor
+          collection={editing === "new" ? undefined : editing}
+          projects={projects}
+          request={request}
+          refresh={refreshGroups}
+          close={() => setEditing(null)}
+        />
       )}
     </section>
   )

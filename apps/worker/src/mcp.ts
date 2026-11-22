@@ -389,6 +389,7 @@ const tools: Tool[] = [
         id: str("Existing collection id"),
         name: str("Collection name"),
         tag: str("Membership tag"),
+        icon: str("Collection emoji or icon"),
         project_id: str("Optional project scope"),
       },
       ["name", "tag"]
@@ -398,7 +399,7 @@ const tools: Tool[] = [
         "/api/collections" +
           (i.id ? "/" + encodeURIComponent(text(i, "id")) : ""),
         i.id ? "PUT" : "POST",
-        pick(i, ["name", "tag", "project_id"])
+        pick(i, ["name", "tag", "project_id", "icon"])
       ),
   },
   {

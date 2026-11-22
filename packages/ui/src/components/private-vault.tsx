@@ -1,3 +1,12 @@
+import { LockKeyhole, Dice5, Plus } from "lucide-react"
+import { categoryIcons } from "./item-menu"
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "./select"
 import { useEffect, useState } from "react"
 import {
   personalFields,
@@ -102,28 +111,66 @@ export function VaultTools({
   }
   return (
     <section className="mx-auto grid w-full max-w-2xl gap-4 p-4">
-      <h1 className="text-xl font-semibold">My vault &amp; tools</h1>
-      <label className="grid gap-1 text-sm">
-        Category
-        <select
-          className="rounded-md border bg-background p-2"
+      <header className="vault-personal-heading">
+        <LockKeyhole size={19} />
+        <div>
+          <h1 className="text-xl font-semibold">My private vault</h1>
+          <p>
+            Only you can see these items. Your workspace members cannot access
+            them.
+          </p>
+        </div>
+      </header>
+      <div className="grid gap-1 text-sm">
+        <span>Category</span>
+        <Select
           value={kind}
           disabled={busy}
-          onChange={(e) => {
-            setKind(e.target.value as typeof kind)
-            select(null)
-            setQuery("")
-            setSecret("")
+          onValueChange={(value) => {
+            if (value) {
+              setKind(value as typeof kind)
+              select(null)
+              setQuery("")
+              setSecret("")
+            }
           }}
         >
-          <option value="generator">Password generator</option>
-          {personalKinds.map((k) => (
-            <option key={k} value={k}>
-              {categoryNames[k]}
-            </option>
-          ))}
-        </select>
-      </label>
+          <SelectTrigger aria-label="Category" className="w-full sm:max-w-xs">
+            <SelectValue>
+              {() => {
+                const Icon = kind === "generator" ? Dice5 : categoryIcons[kind]
+                return (
+                  <>
+                    <Icon />
+                    {kind === "generator"
+                      ? "Password generator"
+                      : categoryNames[kind]}
+                  </>
+                )
+              }}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent
+            alignItemWithTrigger={false}
+            align="start"
+            className="max-h-[min(19rem,var(--available-height))]"
+          >
+            <SelectItem value="generator">
+              <Dice5 />
+              Password generator
+            </SelectItem>
+            {personalKinds.map((k) => {
+              const Icon = categoryIcons[k]
+              return (
+                <SelectItem key={k} value={k}>
+                  <Icon />
+                  {categoryNames[k]}
+                </SelectItem>
+              )
+            })}
+          </SelectContent>
+        </Select>
+      </div>
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}
@@ -330,14 +377,16 @@ export function VaultTools({
         </form>
       ) : (
         <>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Input
+              className="min-w-32 flex-1"
               aria-label="Search titles or tags"
               placeholder="Search titles or tags"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
             <Button onClick={() => select(empty(kind))}>
+              <Plus />
               Add {categoryNames[kind]}
             </Button>
           </div>
