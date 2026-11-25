@@ -142,6 +142,35 @@ async function activate(page: Page) {
     await chrome.tabs.update(tab.id, { active: true })
   }, address)
 }
+test("clicking Save creates and updates a personal identity", async () => {
+  const ui = await popup()
+  await ui.getByRole("button", { name: "Add item" }).click()
+  const [vault] = await Promise.all([
+    context.waitForEvent("page"),
+    ui.getByRole("menuitem", { name: "Identity", exact: true }).click(),
+  ])
+  await expect(vault).toHaveURL(/tools\.html\?kind=profile/)
+  const title = "Browser test identity"
+  const savedIdentity = vault.getByRole("button", { name: title, exact: true })
+  const save = vault.getByRole("button", { name: "Save", exact: true })
+  await vault.getByLabel("Title", { exact: true }).fill(title)
+  await vault.getByLabel("City").fill("Chennai")
+  await save.click()
+  await expect(savedIdentity).toBeVisible()
+
+  await savedIdentity.click()
+  await expect(vault.getByLabel("City")).toHaveValue("Chennai")
+  await vault.getByLabel("City").fill("Salem")
+  await save.click()
+  await expect(savedIdentity).toBeVisible()
+
+  await vault.reload()
+  await vault.getByRole("button", { name: "Cancel", exact: true }).click()
+  await savedIdentity.click()
+  await expect(vault.getByLabel("City")).toHaveValue("Salem")
+  await vault.close()
+  await ui.close()
+})
 test("auto-login OFF leaves a delayed React form untouched", async () => {
   await automatic(false)
   const page = await context.newPage()

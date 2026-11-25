@@ -344,7 +344,9 @@ export function VaultTools({
                 </Button>
               </>
             )}
-            <Button disabled={busy}>Save</Button>
+            <Button type="submit" disabled={busy}>
+              Save
+            </Button>
             <Button
               variant="ghost"
               type="button"
